@@ -211,11 +211,11 @@ Las rutas exactas se definirán durante la implementación.
 
 # 7. PostgreSQL
 
-Base de datos relacional principal.
+Base de datos relacional principal: PostgreSQL 17.
 
 ## Desarrollo
 
-PostgreSQL ejecutado localmente con Docker.
+PostgreSQL 17 ejecutado localmente con Docker Compose mediante la imagen oficial `postgres:17.10-alpine`.
 
 ## Producción
 
@@ -760,7 +760,7 @@ Actuator
 OpenAPI
 
 Database
-PostgreSQL
+PostgreSQL 17
 Neon en producción
 
 Authentication

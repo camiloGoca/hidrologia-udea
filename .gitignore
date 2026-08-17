@@ -21,6 +21,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.pid
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
