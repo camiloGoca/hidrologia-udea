@@ -1,14 +1,70 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
+import PublicLayout from '@/layouts/PublicLayout.vue'
+import LinksView from '@/views/static/LinksView.vue'
+import NewQuestionView from '@/views/static/NewQuestionView.vue'
+import NotFoundView from '@/views/static/NotFoundView.vue'
+import ParcialesView from '@/views/sections/ParcialesView.vue'
+import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
+import TalleresView from '@/views/sections/TalleresView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: HomeView,
+      component: PublicLayout,
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: HomeView,
+        },
+        {
+          path: 'talleres',
+          name: 'workshops',
+          component: TalleresView,
+        },
+        {
+          path: 'talleres/:slug',
+          name: 'workshop-detail',
+          component: SectionPlaceholderView,
+          props: { sectionKind: 'taller' },
+        },
+        {
+          path: 'parciales',
+          name: 'exams',
+          component: ParcialesView,
+        },
+        {
+          path: 'parciales/:slug',
+          name: 'exam-detail',
+          component: SectionPlaceholderView,
+          props: { sectionKind: 'parcial' },
+        },
+        {
+          path: 'enlaces',
+          name: 'links',
+          component: LinksView,
+        },
+        {
+          path: 'preguntas/nueva',
+          name: 'new-question',
+          component: NewQuestionView,
+        },
+      ],
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: PublicLayout,
+      children: [
+        {
+          path: '',
+          component: NotFoundView,
+        },
+      ],
     },
   ],
 })

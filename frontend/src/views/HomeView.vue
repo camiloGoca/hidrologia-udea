@@ -1,104 +1,136 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import FeatureCard from '@/components/FeatureCard.vue'
 
-import { getSections } from '@/services/api/sectionService'
-import type { Section } from '@/types/section'
-
-const sections = ref<Section[]>([])
-const isLoading = ref(true)
-const hasError = ref(false)
-
-const talleres = computed(() =>
-  sections.value.filter((section) => section.type === 'TALLER'),
-)
-const parciales = computed(() =>
-  sections.value.filter((section) => section.type === 'PARCIAL'),
-)
-const isEmpty = computed(
-  () => !isLoading.value && !hasError.value && sections.value.length === 0,
-)
-
-async function loadSections() {
-  isLoading.value = true
-  hasError.value = false
-
-  try {
-    sections.value = await getSections()
-  } catch {
-    hasError.value = true
-    sections.value = []
-  } finally {
-    isLoading.value = false
-  }
-}
-
-onMounted(loadSections)
+const featureCards = [
+  {
+    title: 'Enlaces de interés',
+    description: 'Recursos recomendados para profundizar conceptos y herramientas de la materia.',
+    to: { name: 'links' },
+    icon: 'links' as const,
+  },
+  {
+    title: 'Talleres',
+    description: 'Acceso organizado a las secciones de trabajo práctico del curso.',
+    to: { name: 'workshops' },
+    icon: 'workshops' as const,
+  },
+  {
+    title: 'Parciales',
+    description: 'Punto de entrada para consultar materiales relacionados con evaluaciones.',
+    to: { name: 'exams' },
+    icon: 'exams' as const,
+  },
+]
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-50 px-6 py-12 text-slate-950 sm:py-16">
-    <section class="mx-auto flex max-w-5xl flex-col gap-8">
-      <div class="space-y-3">
-        <p class="text-sm font-semibold uppercase text-sky-700">Sections API</p>
-        <h1 class="text-4xl font-bold">Hidrología UdeA</h1>
-        <p class="max-w-2xl text-lg text-slate-700">
-          Consulta inicial de secciones académicas desde el backend.
-        </p>
-      </div>
+  <div>
+    <section class="relative overflow-hidden bg-sky-950 text-white">
+      <div class="absolute inset-0 bg-gradient-to-br from-emerald-900 via-sky-900 to-cyan-800" />
+      <div
+        class="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-50 to-transparent"
+        aria-hidden="true"
+      />
 
-      <p v-if="isLoading" class="rounded-md border border-sky-200 bg-sky-50 p-4 text-sky-900">
-        Cargando secciones...
-      </p>
+      <div class="relative mx-auto grid max-w-6xl gap-10 px-5 py-20 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div class="max-w-3xl">
+          <p class="text-sm font-semibold uppercase text-emerald-100">Universidad de Antioquia</p>
+          <h1 class="mt-4 text-4xl font-bold sm:text-6xl">Hidrología UdeA</h1>
+          <p class="mt-6 max-w-xl text-2xl font-semibold text-cyan-50">
+            Conocimiento que fluye, ciencia que transforma.
+          </p>
+          <p class="mt-5 max-w-2xl text-lg leading-8 text-sky-50">
+            Espacio académico de Hidrología de la Universidad de Antioquia con recursos,
+            talleres, parciales y respuestas a preguntas frecuentes.
+          </p>
 
-      <p
-        v-else-if="hasError"
-        class="rounded-md border border-red-200 bg-red-50 p-4 text-red-900"
-      >
-        No pudimos cargar las secciones. Intenta nuevamente en unos momentos.
-      </p>
-
-      <p
-        v-else-if="isEmpty"
-        class="rounded-md border border-slate-200 bg-white p-4 text-slate-700"
-      >
-        Todavía no hay secciones disponibles.
-      </p>
-
-      <div v-else class="grid gap-8 lg:grid-cols-2">
-        <section class="space-y-4">
-          <h2 class="text-2xl font-semibold">Talleres</h2>
-
-          <ul class="grid gap-4">
-            <li
-              v-for="section in talleres"
-              :key="section.id"
-              class="rounded-md border border-slate-200 bg-white p-5 shadow-sm"
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <RouterLink
+              :to="{ name: 'workshops' }"
+              class="rounded-md bg-white px-5 py-3 text-center font-semibold text-sky-950 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              <h3 class="text-lg font-semibold">{{ section.name }}</h3>
-              <p v-if="section.description" class="mt-2 text-slate-700">
-                {{ section.description }}
-              </p>
-            </li>
-          </ul>
-        </section>
-
-        <section class="space-y-4">
-          <h2 class="text-2xl font-semibold">Parciales</h2>
-
-          <ul class="grid gap-4">
-            <li
-              v-for="section in parciales"
-              :key="section.id"
-              class="rounded-md border border-slate-200 bg-white p-5 shadow-sm"
+              Ver talleres
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'new-question' }"
+              class="rounded-md border border-white/70 px-5 py-3 text-center font-semibold text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              <h3 class="text-lg font-semibold">{{ section.name }}</h3>
-              <p v-if="section.description" class="mt-2 text-slate-700">
-                {{ section.description }}
-              </p>
-            </li>
-          </ul>
-        </section>
+              Agregar una pregunta
+            </RouterLink>
+          </div>
+        </div>
+
+        <div
+          class="min-h-72 rounded-md border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur"
+          aria-label="Representación visual temporal de una cuenca hidrográfica"
+        >
+          <div class="grid h-full place-items-center rounded-md border border-white/20 bg-sky-950/20 p-6">
+            <svg
+              class="h-56 w-full max-w-sm text-cyan-50"
+              viewBox="0 0 320 220"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M20 170C62 155 76 118 114 109C146 101 163 124 192 111C229 94 230 50 300 36"
+                stroke="currentColor"
+                stroke-width="10"
+                stroke-linecap="round"
+              />
+              <path
+                d="M65 54C92 71 98 93 112 109M150 44C171 65 171 90 192 111M248 86C227 89 209 101 192 111"
+                stroke="currentColor"
+                stroke-width="5"
+                stroke-linecap="round"
+                opacity="0.75"
+              />
+              <path
+                d="M45 184H274"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                opacity="0.45"
+              />
+            </svg>
+          </div>
+        </div>
       </div>
     </section>
-  </main>
+
+    <section class="mx-auto max-w-6xl px-5 py-14 sm:px-6">
+      <div class="max-w-2xl">
+        <p class="text-sm font-semibold uppercase text-emerald-800">Explorar</p>
+        <h2 class="mt-3 text-3xl font-bold text-slate-950">Accesos principales</h2>
+      </div>
+
+      <div class="mt-8 grid gap-5 md:grid-cols-3">
+        <FeatureCard
+          v-for="card in featureCards"
+          :key="card.title"
+          :title="card.title"
+          :description="card.description"
+          :to="card.to"
+          :icon="card.icon"
+        />
+      </div>
+    </section>
+
+    <section class="bg-white">
+      <div class="mx-auto max-w-6xl px-5 py-14 sm:px-6">
+        <div class="rounded-md border border-sky-100 bg-sky-50 p-6 sm:p-8">
+          <p class="text-sm font-semibold uppercase text-sky-800">Participación estudiantil</p>
+          <h2 class="mt-3 text-3xl font-bold text-slate-950">¿No encontraste tu duda?</h2>
+          <p class="mt-3 max-w-2xl leading-7 text-slate-700">
+            En una etapa posterior podrás enviar una pregunta al profesor desde esta sección.
+          </p>
+          <RouterLink
+            :to="{ name: 'new-question' }"
+            class="mt-6 inline-flex rounded-md bg-sky-800 px-5 py-3 font-semibold text-white hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-700"
+          >
+            Agregar una pregunta
+          </RouterLink>
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
