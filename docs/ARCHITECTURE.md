@@ -32,7 +32,7 @@ No se utilizarán microservicios para el MVP.
                 ┌────────────────────┐
                 │ Google Cloud Run   │
                 │                    │
-                │ Spring Boot        │
+                │ Spring Boot 4.1.x  │
                 │ Java 17            │
                 └───┬────────┬───────┘
                     │        │
@@ -134,7 +134,7 @@ Toda operación sensible debe validarse nuevamente en el backend.
 Tecnologías:
 
 * Java 17
-* Spring Boot
+* Spring Boot 4.1.x
 * Maven
 * Spring Web
 * Spring Security
@@ -748,7 +748,7 @@ Tailwind CSS
 
 Backend
 Java 17
-Spring Boot
+Spring Boot 4.1.x
 Maven
 Spring Web
 Spring Security

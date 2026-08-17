@@ -230,7 +230,7 @@ La simplicidad es una prioridad del proyecto.
 Stack principal:
 
 * Java 17
-* Spring Boot
+* Spring Boot 4.1.x
 * Maven
 * Spring Web
 * Spring Security
