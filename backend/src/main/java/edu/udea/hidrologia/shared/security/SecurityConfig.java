@@ -17,6 +17,7 @@ public class SecurityConfig {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.GET, "/api/v1/links").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sections").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
