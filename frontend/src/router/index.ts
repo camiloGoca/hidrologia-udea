@@ -5,9 +5,11 @@ import PublicLayout from '@/layouts/PublicLayout.vue'
 import LinksView from '@/views/static/LinksView.vue'
 import NewQuestionView from '@/views/static/NewQuestionView.vue'
 import NotFoundView from '@/views/static/NotFoundView.vue'
+import PostDetailView from '@/views/posts/PostDetailView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
 import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
 import TalleresView from '@/views/sections/TalleresView.vue'
+import HashtagPostsView from '@/views/tags/HashtagPostsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -47,6 +49,16 @@ const router = createRouter({
           path: 'enlaces',
           name: 'links',
           component: LinksView,
+        },
+        {
+          path: 'publicaciones/:id',
+          name: 'post-detail',
+          component: PostDetailView,
+        },
+        {
+          path: 'hashtags/:slug',
+          name: 'hashtag-detail',
+          component: HashtagPostsView,
         },
         {
           path: 'preguntas/nueva',

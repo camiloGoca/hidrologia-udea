@@ -19,6 +19,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/api/v1/links").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sections").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/sections/{slug}/posts").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/posts/{id}").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/tags/{slug}/posts").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
                                 "/actuator/health",

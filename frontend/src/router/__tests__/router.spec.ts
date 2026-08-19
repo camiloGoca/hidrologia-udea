@@ -15,6 +15,12 @@ describe('router', () => {
     )
     expect(routes.some((route) => route.path === '/enlaces' && route.name === 'links')).toBe(true)
     expect(
+      routes.some((route) => route.path === '/publicaciones/:id' && route.name === 'post-detail'),
+    ).toBe(true)
+    expect(
+      routes.some((route) => route.path === '/hashtags/:slug' && route.name === 'hashtag-detail'),
+    ).toBe(true)
+    expect(
       routes.some((route) => route.path === '/preguntas/nueva' && route.name === 'new-question'),
     ).toBe(true)
     expect(
