@@ -14,6 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import edu.udea.hidrologia.link.repository.InterestingLinkRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
+import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.tag.repository.TagRepository;
@@ -36,6 +37,9 @@ class HealthControllerTest {
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;
+
+    @MockitoBean
+    private QuestionAttachmentRepository questionAttachmentRepository;
 
     @Autowired
     private MockMvc mockMvc;

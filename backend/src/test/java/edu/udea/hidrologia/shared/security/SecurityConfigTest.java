@@ -3,9 +3,11 @@ package edu.udea.hidrologia.shared.security;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,6 +28,8 @@ import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
+import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
+import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
@@ -45,6 +50,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StudentQuestionService studentQuestionService;
+
+    @MockitoBean
+    private StudentQuestionRepository studentQuestionRepository;
+
+    @MockitoBean
+    private QuestionAttachmentRepository questionAttachmentRepository;
 
     @Autowired
     private MockMvc mockMvc;
@@ -99,22 +110,31 @@ class SecurityConfigTest {
 
     @Test
     void allowsPublicQuestionSubmissionEndpoint() throws Exception {
-        when(studentQuestionService.createQuestion(any()))
+        when(studentQuestionService.createQuestion(any(), any()))
                 .thenReturn(new CreateStudentQuestionResponse(
                         1L,
                         StudentQuestionStatus.PENDING,
                         Instant.parse("2026-01-01T00:00:00Z")));
 
-        mockMvc.perform(post("/api/v1/questions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
+        mockMvc.perform(multipart("/api/v1/questions")
+                .file(new MockMultipartFile(
+                        "data",
+                        "data.json",
+                        MediaType.APPLICATION_JSON_VALUE,
+                        """
                         {
                           "sectionSlug": "taller-1",
                           "nickname": "Estudiante",
                           "question": "Pregunta de prueba"
                         }
-                        """))
+                        """.getBytes(StandardCharsets.UTF_8))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void deniesStandalonePublicImageUploadEndpoint() throws Exception {
+        mockMvc.perform(post("/api/v1/images"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -1,13 +1,18 @@
 package edu.udea.hidrologia.question.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionRequest;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
@@ -23,11 +28,21 @@ public class StudentQuestionController {
         this.studentQuestionService = studentQuestionService;
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Submit a student question")
+    @Operation(
+            summary = "Submit a student question",
+            requestBody = @RequestBody(content = @Content(
+                    mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = CreateStudentQuestionMultipartRequest.class))))
     public CreateStudentQuestionResponse createQuestion(
-            @Valid @RequestBody CreateStudentQuestionRequest request) {
-        return studentQuestionService.createQuestion(request);
+            @Valid @RequestPart("data") CreateStudentQuestionRequest request,
+            @RequestPart(value = "image", required = false) MultipartFile image) {
+        return studentQuestionService.createQuestion(request, image);
+    }
+
+    private record CreateStudentQuestionMultipartRequest(
+            CreateStudentQuestionRequest data,
+            MultipartFile image) {
     }
 }

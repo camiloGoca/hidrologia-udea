@@ -17,6 +17,8 @@ vi.mock('@/services/api/questionService', () => ({
 
 const mockedGetSections = vi.mocked(getSections)
 const mockedCreateQuestion = vi.mocked(createQuestion)
+const createObjectUrl = vi.fn<(object: Blob) => string>(() => 'blob:preview')
+const revokeObjectUrl = vi.fn<(url: string) => void>()
 
 const routerLinkStub = {
   props: ['to'],
@@ -63,6 +65,12 @@ describe('NewQuestionView', () => {
   beforeEach(() => {
     mockedGetSections.mockReset()
     mockedCreateQuestion.mockReset()
+    createObjectUrl.mockClear()
+    revokeObjectUrl.mockClear()
+    vi.stubGlobal('URL', {
+      createObjectURL: createObjectUrl,
+      revokeObjectURL: revokeObjectUrl,
+    })
     mockedCreateQuestion.mockResolvedValue({
       id: 1,
       status: 'PENDING',
@@ -105,9 +113,12 @@ describe('NewQuestionView', () => {
     await flushPromises()
 
     expect(mockedCreateQuestion).toHaveBeenCalledWith({
-      sectionSlug: 'taller-1',
-      nickname: null,
-      question: 'Pregunta tecnica',
+      data: {
+        sectionSlug: 'taller-1',
+        nickname: null,
+        question: 'Pregunta tecnica',
+      },
+      image: null,
     })
   })
 
@@ -121,9 +132,12 @@ describe('NewQuestionView', () => {
     await flushPromises()
 
     expect(mockedCreateQuestion).toHaveBeenCalledWith({
-      sectionSlug: 'parcial-1',
-      nickname: 'Estudiante',
-      question: 'Como reviso este procedimiento?',
+      data: {
+        sectionSlug: 'parcial-1',
+        nickname: 'Estudiante',
+        question: 'Como reviso este procedimiento?',
+      },
+      image: null,
     })
   })
 
@@ -176,4 +190,120 @@ describe('NewQuestionView', () => {
 
     expect(wrapper.text()).toContain('No pudimos enviar tu pregunta.')
   })
+
+  it('shows selected JPEG image name and preview', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['image'], 'captura.jpg', { type: 'image/jpeg' })
+
+    await selectImage(wrapper, file)
+
+    expect(wrapper.text()).toContain('captura.jpg')
+    expect(createObjectUrl).toHaveBeenCalledWith(file)
+    expect(wrapper.get('img').attributes('src')).toBe('blob:preview')
+  })
+
+  it('accepts a PNG image and sends it with the payload', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await wrapper.get('select#section').setValue('taller-1')
+    await wrapper.get('textarea#question').setValue('Pregunta tecnica')
+    await selectImage(wrapper, file)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockedCreateQuestion).toHaveBeenCalledWith({
+      data: {
+        sectionSlug: 'taller-1',
+        nickname: null,
+        question: 'Pregunta tecnica',
+      },
+      image: file,
+    })
+  })
+
+  it('rejects an image larger than 5 MB before sending', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.png', {
+      type: 'image/png',
+    })
+
+    await wrapper.get('select#section').setValue('taller-1')
+    await wrapper.get('textarea#question').setValue('Pregunta tecnica')
+    await selectImage(wrapper, file)
+    await wrapper.get('form').trigger('submit')
+
+    expect(wrapper.text()).toContain('La imagen debe pesar 5 MB o menos.')
+    expect(mockedCreateQuestion).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsupported image types before sending', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['gif'], 'animacion.gif', { type: 'image/gif' })
+
+    await selectImage(wrapper, file)
+
+    expect(wrapper.text()).toContain('Adjunta una imagen JPEG o PNG.')
+    expect(createObjectUrl).not.toHaveBeenCalled()
+  })
+
+  it('removes the selected image and revokes its preview', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await selectImage(wrapper, file)
+    await wrapper.get('button[type="button"]').trigger('click')
+
+    expect(wrapper.text()).not.toContain('grafica.png')
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:preview')
+  })
+
+  it('replaces a selected image and revokes the previous preview', async () => {
+    createObjectUrl.mockReturnValueOnce('blob:first').mockReturnValueOnce('blob:second')
+    const wrapper = await mountLoadedView()
+    const firstFile = new File(['first'], 'primera.png', { type: 'image/png' })
+    const secondFile = new File(['second'], 'segunda.png', { type: 'image/png' })
+
+    await selectImage(wrapper, firstFile)
+    await selectImage(wrapper, secondFile)
+
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:first')
+    expect(wrapper.text()).toContain('segunda.png')
+    expect(wrapper.get('img').attributes('src')).toBe('blob:second')
+  })
+
+  it('revokes the selected image preview when the component is unmounted', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await selectImage(wrapper, file)
+    wrapper.unmount()
+
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:preview')
+  })
+
+  it('clears the image after success', async () => {
+    const wrapper = await mountLoadedView()
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await wrapper.get('select#section').setValue('taller-1')
+    await wrapper.get('textarea#question').setValue('Pregunta tecnica')
+    await selectImage(wrapper, file)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Tu pregunta fue enviada')
+    expect(wrapper.text()).not.toContain('grafica.png')
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:preview')
+  })
 })
+
+async function selectImage(wrapper: ReturnType<typeof mount>, file: File) {
+  const input = wrapper.get('input#image')
+  Object.defineProperty(input.element, 'files', {
+    value: [file],
+    configurable: true,
+  })
+
+  await input.trigger('change')
+}

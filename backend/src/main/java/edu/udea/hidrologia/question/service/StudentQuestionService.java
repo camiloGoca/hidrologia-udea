@@ -1,64 +1,70 @@
 package edu.udea.hidrologia.question.service;
 
-import java.time.Clock;
-import java.time.Instant;
+import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionRequest;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
-import edu.udea.hidrologia.question.entity.StudentQuestion;
-import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
-import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
-import edu.udea.hidrologia.section.entity.Section;
-import edu.udea.hidrologia.section.repository.SectionRepository;
-import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
+import edu.udea.hidrologia.shared.storage.ImageFileValidator;
+import edu.udea.hidrologia.shared.storage.ImageStorageService;
+import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
+import edu.udea.hidrologia.shared.storage.ImageUpload;
+import edu.udea.hidrologia.shared.storage.StoredImage;
 
 @Service
 public class StudentQuestionService {
 
-    private final StudentQuestionRepository studentQuestionRepository;
-    private final SectionRepository sectionRepository;
-    private final Clock clock;
+    private static final Logger LOGGER = LoggerFactory.getLogger(StudentQuestionService.class);
+
+    private final StudentQuestionPersistenceService persistenceService;
+    private final ImageFileValidator imageFileValidator;
+    private final ObjectProvider<ImageStorageService> imageStorageServiceProvider;
 
     public StudentQuestionService(
-            StudentQuestionRepository studentQuestionRepository,
-            SectionRepository sectionRepository,
-            Clock clock) {
-        this.studentQuestionRepository = studentQuestionRepository;
-        this.sectionRepository = sectionRepository;
-        this.clock = clock;
+            StudentQuestionPersistenceService persistenceService,
+            ImageFileValidator imageFileValidator,
+            ObjectProvider<ImageStorageService> imageStorageServiceProvider) {
+        this.persistenceService = persistenceService;
+        this.imageFileValidator = imageFileValidator;
+        this.imageStorageServiceProvider = imageStorageServiceProvider;
     }
 
-    @Transactional
-    public CreateStudentQuestionResponse createQuestion(CreateStudentQuestionRequest request) {
-        Section section = sectionRepository.findBySlugAndActiveTrue(request.sectionSlug().trim())
-                .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
-        Instant now = Instant.now(clock);
-        StudentQuestion question = new StudentQuestion(
-                null,
-                section,
-                normalizeOptionalText(request.nickname()),
-                request.question().trim(),
-                StudentQuestionStatus.PENDING,
-                now,
-                now);
-        StudentQuestion savedQuestion = studentQuestionRepository.save(question);
+    public CreateStudentQuestionResponse createQuestion(CreateStudentQuestionRequest request, MultipartFile image) {
+        Optional<ImageUpload> imageUpload = imageFileValidator.validateOptional(image);
 
-        return new CreateStudentQuestionResponse(
-                savedQuestion.getId(),
-                savedQuestion.getStatus(),
-                savedQuestion.getCreatedAt());
-    }
-
-    private String normalizeOptionalText(String value) {
-        if (value == null) {
-            return null;
+        if (imageUpload.isEmpty()) {
+            return persistenceService.persist(request, null);
         }
 
-        String trimmedValue = value.trim();
+        ImageStorageService imageStorageService = imageStorageServiceProvider.getIfAvailable();
+        if (imageStorageService == null) {
+            throw new ImageStorageUnavailableException("Image uploads are temporarily unavailable");
+        }
 
-        return trimmedValue.isEmpty() ? null : trimmedValue;
+        StoredImage storedImage = imageStorageService.upload(imageUpload.get());
+
+        try {
+            return persistenceService.persist(request, storedImage);
+        } catch (RuntimeException exception) {
+            compensateUploadedImage(imageStorageService, storedImage.publicId(), exception);
+            throw exception;
+        }
+    }
+
+    private void compensateUploadedImage(
+            ImageStorageService imageStorageService,
+            String publicId,
+            RuntimeException originalException) {
+        try {
+            imageStorageService.delete(publicId);
+        } catch (RuntimeException deleteException) {
+            LOGGER.warn("Failed to delete uploaded question image after persistence failure. publicId={}", publicId,
+                    deleteException);
+        }
     }
 }

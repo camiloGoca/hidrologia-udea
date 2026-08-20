@@ -3,16 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { httpClient } from '@/services/api/httpClient'
 import { createQuestion } from '@/services/api/questionService'
-import type {
-  CreateStudentQuestionRequest,
-  CreateStudentQuestionResponse,
-} from '@/types/studentQuestion'
+import type { CreateStudentQuestionResponse } from '@/types/studentQuestion'
 
 vi.mock('@/services/api/httpClient', () => ({
   httpClient: {
-    post: vi.fn<
-      (url: string, payload: CreateStudentQuestionRequest) => Promise<AxiosResponse<CreateStudentQuestionResponse>>
-    >(),
+    post: vi.fn<(url: string, payload: FormData) => Promise<AxiosResponse<CreateStudentQuestionResponse>>>(),
   },
 }))
 
@@ -23,12 +18,7 @@ describe('questionService', () => {
     mockedPost.mockReset()
   })
 
-  it('posts a student question and returns the creation response', async () => {
-    const payload: CreateStudentQuestionRequest = {
-      sectionSlug: 'taller-1',
-      nickname: 'Estudiante',
-      question: 'Pregunta de prueba',
-    }
+  it('posts a student question as multipart FormData without image', async () => {
     const response: CreateStudentQuestionResponse = {
       id: 1,
       status: 'PENDING',
@@ -37,7 +27,69 @@ describe('questionService', () => {
 
     mockedPost.mockResolvedValue({ data: response } as AxiosResponse<CreateStudentQuestionResponse>)
 
-    await expect(createQuestion(payload)).resolves.toEqual(response)
-    expect(mockedPost).toHaveBeenCalledWith('/questions', payload)
+    await expect(
+      createQuestion({
+        data: {
+          sectionSlug: 'taller-1',
+          nickname: 'Estudiante',
+          question: 'Pregunta de prueba',
+        },
+      }),
+    ).resolves.toEqual(response)
+
+    expect(mockedPost).toHaveBeenCalledWith('/questions', expect.any(FormData))
+    const formData = postedFormData()
+
+    expect(formData.get('data')).toBeInstanceOf(Blob)
+    expect(formData.has('image')).toBe(false)
+  })
+
+  it('includes the optional image when provided', async () => {
+    const image = new File(['image'], 'image.png', { type: 'image/png' })
+    const response: CreateStudentQuestionResponse = {
+      id: 1,
+      status: 'PENDING',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+
+    mockedPost.mockResolvedValue({ data: response } as AxiosResponse<CreateStudentQuestionResponse>)
+
+    await createQuestion({
+      data: {
+        sectionSlug: 'taller-1',
+        nickname: null,
+        question: 'Pregunta de prueba',
+      },
+      image,
+    })
+
+    const formData = postedFormData()
+
+    expect(formData.get('image')).toBe(image)
+  })
+
+  it('keeps the previous call shape by wrapping the JSON payload in FormData', async () => {
+    const response: CreateStudentQuestionResponse = {
+      id: 1,
+      status: 'PENDING',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+
+    mockedPost.mockResolvedValue({ data: response } as AxiosResponse<CreateStudentQuestionResponse>)
+
+    await createQuestion({
+      sectionSlug: 'taller-1',
+      nickname: null,
+      question: 'Pregunta de prueba',
+    })
+
+    expect(mockedPost).toHaveBeenCalledWith('/questions', expect.any(FormData))
   })
 })
+
+function postedFormData() {
+  const call = mockedPost.mock.calls[0]
+  expect(call).toBeDefined()
+
+  return call![1] as FormData
+}

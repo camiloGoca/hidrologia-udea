@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import PageBanner from '@/components/PageBanner.vue'
 import { createQuestion } from '@/services/api/questionService'
 import { getSections } from '@/services/api/sectionService'
 import type { Section } from '@/types/section'
-import { NICKNAME_MAX_LENGTH, QUESTION_MAX_LENGTH } from '@/types/studentQuestion'
+import {
+  NICKNAME_MAX_LENGTH,
+  QUESTION_IMAGE_ACCEPTED_TYPES,
+  QUESTION_IMAGE_MAX_SIZE_BYTES,
+  QUESTION_MAX_LENGTH,
+} from '@/types/studentQuestion'
 
 type SubmitState = 'INITIAL' | 'SUBMITTING' | 'SUCCESS' | 'ERROR'
 
@@ -13,6 +18,9 @@ const sections = ref<Section[]>([])
 const isLoadingSections = ref(true)
 const hasSectionsError = ref(false)
 const submitState = ref<SubmitState>('INITIAL')
+const selectedImage = ref<File | null>(null)
+const imagePreviewUrl = ref<string | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
 
 const form = reactive({
   nickname: '',
@@ -24,6 +32,7 @@ const errors = reactive({
   sectionSlug: '',
   question: '',
   nickname: '',
+  image: '',
 })
 
 const talleres = computed(() => sections.value.filter((section) => section.type === 'TALLER'))
@@ -31,8 +40,12 @@ const parciales = computed(() => sections.value.filter((section) => section.type
 const questionLength = computed(() => form.question.length)
 const isSubmitting = computed(() => submitState.value === 'SUBMITTING')
 const canSubmit = computed(() => !isSubmitting.value && !isLoadingSections.value)
+const selectedImageSize = computed(() =>
+  selectedImage.value ? formatFileSize(selectedImage.value.size) : '',
+)
 
 onMounted(loadSections)
+onUnmounted(revokePreviewUrl)
 
 async function loadSections() {
   isLoadingSections.value = true
@@ -63,13 +76,17 @@ async function submitQuestion() {
 
   try {
     await createQuestion({
-      sectionSlug: form.sectionSlug,
-      nickname: normalizeOptionalText(form.nickname),
-      question: form.question.trim(),
+      data: {
+        sectionSlug: form.sectionSlug,
+        nickname: normalizeOptionalText(form.nickname),
+        question: form.question.trim(),
+      },
+      image: selectedImage.value,
     })
     form.nickname = ''
     form.sectionSlug = ''
     form.question = ''
+    clearSelectedImage()
     submitState.value = 'SUCCESS'
   } catch {
     submitState.value = 'ERROR'
@@ -95,13 +112,80 @@ function validateForm() {
     errors.nickname = `El apodo debe tener ${NICKNAME_MAX_LENGTH} caracteres o menos.`
   }
 
-  return !errors.sectionSlug && !errors.question && !errors.nickname
+  if (selectedImage.value) {
+    errors.image = validateImage(selectedImage.value)
+  }
+
+  return !errors.sectionSlug && !errors.question && !errors.nickname && !errors.image
 }
 
 function normalizeOptionalText(value: string) {
   const trimmedValue = value.trim()
 
   return trimmedValue ? trimmedValue : null
+}
+
+function handleImageChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+
+  errors.image = ''
+
+  if (!file) {
+    clearSelectedImage()
+    return
+  }
+
+  const validationMessage = validateImage(file)
+  if (validationMessage) {
+    errors.image = validationMessage
+    clearSelectedImage()
+    return
+  }
+
+  revokePreviewUrl()
+  selectedImage.value = file
+  imagePreviewUrl.value = URL.createObjectURL(file)
+}
+
+function removeSelectedImage() {
+  clearSelectedImage()
+}
+
+function clearSelectedImage() {
+  revokePreviewUrl()
+  selectedImage.value = null
+
+  if (imageInput.value) {
+    imageInput.value.value = ''
+  }
+}
+
+function revokePreviewUrl() {
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value)
+    imagePreviewUrl.value = null
+  }
+}
+
+function validateImage(file: File) {
+  if (!QUESTION_IMAGE_ACCEPTED_TYPES.some((acceptedType) => acceptedType === file.type)) {
+    return 'Adjunta una imagen JPEG o PNG.'
+  }
+
+  if (file.size > QUESTION_IMAGE_MAX_SIZE_BYTES) {
+    return 'La imagen debe pesar 5 MB o menos.'
+  }
+
+  return ''
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024 * 1024) {
+    return `${Math.max(1, Math.round(size / 1024))} KB`
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 </script>
 
@@ -233,6 +317,54 @@ function normalizeOptionalText(value: string) {
             <p v-if="errors.question" id="question-error" class="mt-2 text-sm font-bold text-red-800">
               {{ errors.question }}
             </p>
+          </div>
+
+          <div>
+            <label for="image" class="block text-sm font-black text-slate-950">
+              Adjuntar imagen (opcional)
+            </label>
+            <p id="image-help" class="mt-2 text-sm leading-6 text-slate-600">
+              Puedes adjuntar una captura, gráfica o procedimiento en JPEG o PNG. Máximo 5 MB.
+            </p>
+            <input
+              id="image"
+              ref="imageInput"
+              type="file"
+              accept="image/jpeg,image/png"
+              aria-describedby="image-help image-error"
+              class="mt-3 w-full rounded-2xl border border-dashed border-cyan-200 bg-cyan-50/60 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-sky-950 file:px-4 file:py-2 file:text-sm file:font-black file:text-white hover:border-cyan-400 focus:border-sky-800 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="isSubmitting"
+              @change="handleImageChange"
+            />
+            <p v-if="errors.image" id="image-error" class="mt-2 text-sm font-bold text-red-800">
+              {{ errors.image }}
+            </p>
+
+            <div
+              v-if="selectedImage"
+              class="mt-4 overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-sm"
+            >
+              <img
+                v-if="imagePreviewUrl"
+                :src="imagePreviewUrl"
+                :alt="`Vista previa de ${selectedImage.name}`"
+                class="h-56 w-full object-contain bg-slate-100"
+              />
+              <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <p class="font-black text-slate-950">{{ selectedImage.name }}</p>
+                  <p class="mt-1 text-sm font-bold text-slate-600">{{ selectedImageSize }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="rounded-full border border-slate-300 px-4 py-2 text-sm font-black text-slate-800 transition hover:border-red-300 hover:bg-red-50 hover:text-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isSubmitting"
+                  @click="removeSelectedImage"
+                >
+                  Quitar imagen
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

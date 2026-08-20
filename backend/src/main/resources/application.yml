@@ -1,6 +1,10 @@
 spring:
   application:
     name: hidrologia-udea-backend
+  servlet:
+    multipart:
+      max-file-size: ${QUESTION_IMAGE_MAX_FILE_SIZE:5MB}
+      max-request-size: ${QUESTION_IMAGE_MAX_REQUEST_SIZE:6MB}
   autoconfigure:
     exclude:
       - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
@@ -35,3 +39,9 @@ hidrologia:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
+  uploads:
+    images:
+      max-size-bytes: ${QUESTION_IMAGE_MAX_BYTES:5242880}
+      max-width: ${QUESTION_IMAGE_MAX_WIDTH:12000}
+      max-height: ${QUESTION_IMAGE_MAX_HEIGHT:12000}
+      max-pixels: ${QUESTION_IMAGE_MAX_PIXELS:60000000}
