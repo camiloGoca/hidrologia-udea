@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getInterestingLinks } from '@/services/api/linkService'
 import type { InterestingLink } from '@/types/interestingLink'
 import LinksView from '@/views/static/LinksView.vue'
-import NewQuestionView from '@/views/static/NewQuestionView.vue'
 import NotFoundView from '@/views/static/NotFoundView.vue'
 
 vi.mock('@/services/api/linkService', () => ({
@@ -86,13 +85,6 @@ describe('static public views', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('No pudimos cargar los enlaces de interés.')
-  })
-
-  it('renders NewQuestionView as a structural page', () => {
-    const wrapper = mount(NewQuestionView)
-
-    expect(wrapper.text()).toContain('Agregar una pregunta')
-    expect(wrapper.text()).toContain('enviar una pregunta')
   })
 
   it('renders NotFoundView', () => {

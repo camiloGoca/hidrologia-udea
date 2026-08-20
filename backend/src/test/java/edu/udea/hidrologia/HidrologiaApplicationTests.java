@@ -6,6 +6,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import edu.udea.hidrologia.link.repository.InterestingLinkRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
+import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.tag.repository.TagRepository;
 
@@ -23,6 +24,9 @@ class HidrologiaApplicationTests {
 
     @MockitoBean
     private TagRepository tagRepository;
+
+    @MockitoBean
+    private StudentQuestionRepository studentQuestionRepository;
 
     @Test
     void contextLoads() {

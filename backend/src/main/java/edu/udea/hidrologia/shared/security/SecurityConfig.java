@@ -22,6 +22,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/sections/{slug}/posts").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/posts/{id}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/tags/{slug}/posts").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/questions").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
                                 "/actuator/health",
