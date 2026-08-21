@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,13 +17,16 @@ import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import edu.udea.hidrologia.question.dto.AdminPendingQuestionsResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionAttachmentResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionDetailResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSectionResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSummaryResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.service.AdminQuestionService;
+import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
+import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
@@ -43,13 +47,14 @@ class AdminQuestionControllerTest {
     }
 
     @Test
-    void returnsPendingQuestions() throws Exception {
-        when(adminQuestionService.findPendingQuestions(2, 10))
-                .thenReturn(new AdminPendingQuestionsResponse(
+    void returnsQuestionsByStatus() throws Exception {
+        when(adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.ARCHIVED, 2, 10))
+                .thenReturn(new AdminQuestionsResponse(
                         List.of(new AdminQuestionSummaryResponse(
                                 1L,
                                 null,
                                 section(),
+                                StudentQuestionStatus.ARCHIVED,
                                 "Pregunta",
                                 true,
                                 NOW)),
@@ -58,10 +63,11 @@ class AdminQuestionControllerTest {
                         21,
                         3));
 
-        mockMvc.perform(get("/api/v1/admin/questions/pending?page=2&size=10"))
+        mockMvc.perform(get("/api/v1/admin/questions?status=ARCHIVED&page=2&size=10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id", is(1)))
                 .andExpect(jsonPath("$.items[0].nickname").doesNotExist())
+                .andExpect(jsonPath("$.items[0].status", is("ARCHIVED")))
                 .andExpect(jsonPath("$.items[0].questionPreview", is("Pregunta")))
                 .andExpect(jsonPath("$.items[0].hasAttachment", is(true)))
                 .andExpect(jsonPath("$.items[0].section.slug", is("taller-1")))
@@ -70,19 +76,29 @@ class AdminQuestionControllerTest {
                 .andExpect(jsonPath("$.totalElements", is(21)))
                 .andExpect(jsonPath("$.totalPages", is(3)));
 
-        verify(adminQuestionService).findPendingQuestions(2, 10);
+        verify(adminQuestionService).findQuestionsByStatus(StudentQuestionStatus.ARCHIVED, 2, 10);
     }
 
     @Test
-    void usesDefaultPaginationParameters() throws Exception {
+    void keepsPendingEndpointForCompatibility() throws Exception {
         when(adminQuestionService.findPendingQuestions(0, 20))
-                .thenReturn(new AdminPendingQuestionsResponse(List.of(), 0, 20, 0, 0));
+                .thenReturn(new AdminQuestionsResponse(List.of(), 0, 20, 0, 0));
 
         mockMvc.perform(get("/api/v1/admin/questions/pending"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isEmpty());
 
         verify(adminQuestionService).findPendingQuestions(0, 20);
+    }
+
+    @Test
+    void returnsBadRequestForPublishedListInThisPhase() throws Exception {
+        when(adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PUBLISHED, 0, 20))
+                .thenThrow(new UnsupportedQuestionStatusFilterException());
+
+        mockMvc.perform(get("/api/v1/admin/questions?status=PUBLISHED"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)));
     }
 
     @Test
@@ -120,6 +136,47 @@ class AdminQuestionControllerTest {
         mockMvc.perform(get("/api/v1/admin/questions/404"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message", is("Question not found")));
+    }
+
+    @Test
+    void rejectsQuestion() throws Exception {
+        when(adminQuestionService.rejectQuestion(1L))
+                .thenReturn(new AdminQuestionStatusUpdateResponse(1L, StudentQuestionStatus.REJECTED, NOW));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/reject"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.status", is("REJECTED")));
+    }
+
+    @Test
+    void archivesQuestion() throws Exception {
+        when(adminQuestionService.archiveQuestion(1L))
+                .thenReturn(new AdminQuestionStatusUpdateResponse(1L, StudentQuestionStatus.ARCHIVED, NOW));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/archive"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ARCHIVED")));
+    }
+
+    @Test
+    void reopensQuestion() throws Exception {
+        when(adminQuestionService.reopenQuestion(1L))
+                .thenReturn(new AdminQuestionStatusUpdateResponse(1L, StudentQuestionStatus.PENDING, NOW));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/reopen"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("PENDING")));
+    }
+
+    @Test
+    void returnsConflictForInvalidTransition() throws Exception {
+        when(adminQuestionService.archiveQuestion(1L)).thenThrow(new InvalidQuestionStatusTransitionException());
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/archive"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.error", is("Conflict")));
     }
 
     private AdminQuestionSectionResponse section() {

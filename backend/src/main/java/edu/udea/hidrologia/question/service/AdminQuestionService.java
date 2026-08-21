@@ -1,16 +1,22 @@
 package edu.udea.hidrologia.question.service;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import edu.udea.hidrologia.question.dto.AdminPendingQuestionsResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionAttachmentResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionDetailResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSectionResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSummaryResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -25,25 +31,34 @@ public class AdminQuestionService {
     private static final int MAX_PAGE_SIZE = 50;
     private static final int PREVIEW_LIMIT = 200;
     private static final String ELLIPSIS = "\u2026";
+    private static final Set<StudentQuestionStatus> LISTABLE_STATUSES = EnumSet.of(
+            StudentQuestionStatus.PENDING,
+            StudentQuestionStatus.ARCHIVED,
+            StudentQuestionStatus.REJECTED);
 
     private final StudentQuestionRepository studentQuestionRepository;
+    private final Clock clock;
 
-    public AdminQuestionService(StudentQuestionRepository studentQuestionRepository) {
+    public AdminQuestionService(StudentQuestionRepository studentQuestionRepository, Clock clock) {
         this.studentQuestionRepository = studentQuestionRepository;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
-    public AdminPendingQuestionsResponse findPendingQuestions(int page, int size) {
+    public AdminQuestionsResponse findQuestionsByStatus(StudentQuestionStatus status, int page, int size) {
+        if (!LISTABLE_STATUSES.contains(status)) {
+            throw new UnsupportedQuestionStatusFilterException();
+        }
+
         int safePage = Math.max(page, 0);
         int safeSize = normalizeSize(size);
         PageRequest pageRequest = PageRequest.of(
                 safePage,
                 safeSize,
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-        Page<StudentQuestion> questionPage =
-                studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest);
+        Page<StudentQuestion> questionPage = studentQuestionRepository.findByStatus(status, pageRequest);
 
-        return new AdminPendingQuestionsResponse(
+        return new AdminQuestionsResponse(
                 questionPage.getContent().stream().map(this::toSummaryResponse).toList(),
                 questionPage.getNumber(),
                 questionPage.getSize(),
@@ -52,11 +67,66 @@ public class AdminQuestionService {
     }
 
     @Transactional(readOnly = true)
+    public AdminQuestionsResponse findPendingQuestions(int page, int size) {
+        return findQuestionsByStatus(StudentQuestionStatus.PENDING, page, size);
+    }
+
+    @Transactional(readOnly = true)
     public AdminQuestionDetailResponse findQuestionById(Long id) {
         StudentQuestion question = studentQuestionRepository.findByIdWithSectionAndAttachment(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
         return toDetailResponse(question);
+    }
+
+    @Transactional
+    public AdminQuestionStatusUpdateResponse rejectQuestion(Long id) {
+        return transitionQuestion(id, StudentQuestionStatus.PENDING, StudentQuestionStatus.REJECTED);
+    }
+
+    @Transactional
+    public AdminQuestionStatusUpdateResponse archiveQuestion(Long id) {
+        return transitionQuestion(id, StudentQuestionStatus.PENDING, StudentQuestionStatus.ARCHIVED);
+    }
+
+    @Transactional
+    public AdminQuestionStatusUpdateResponse reopenQuestion(Long id) {
+        StudentQuestion question = studentQuestionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+
+        if (question.getStatus() != StudentQuestionStatus.REJECTED
+                && question.getStatus() != StudentQuestionStatus.ARCHIVED) {
+            throw new InvalidQuestionStatusTransitionException();
+        }
+
+        return updateStatus(question, StudentQuestionStatus.PENDING);
+    }
+
+    private AdminQuestionStatusUpdateResponse transitionQuestion(
+            Long id,
+            StudentQuestionStatus expectedStatus,
+            StudentQuestionStatus targetStatus) {
+        StudentQuestion question = studentQuestionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+
+        if (question.getStatus() != expectedStatus) {
+            throw new InvalidQuestionStatusTransitionException();
+        }
+
+        return updateStatus(question, targetStatus);
+    }
+
+    private AdminQuestionStatusUpdateResponse updateStatus(
+            StudentQuestion question,
+            StudentQuestionStatus targetStatus) {
+        Instant updatedAt = Instant.now(clock);
+        question.transitionTo(targetStatus, updatedAt);
+        StudentQuestion savedQuestion = studentQuestionRepository.save(question);
+
+        return new AdminQuestionStatusUpdateResponse(
+                savedQuestion.getId(),
+                savedQuestion.getStatus(),
+                savedQuestion.getUpdatedAt());
     }
 
     private int normalizeSize(int size) {
@@ -72,6 +142,7 @@ public class AdminQuestionService {
                 question.getId(),
                 question.getNickname(),
                 toSectionResponse(question.getSection()),
+                question.getStatus(),
                 toPreview(question.getQuestion()),
                 question.getAttachment() != null,
                 question.getCreatedAt());

@@ -7,8 +7,7 @@
           <div>
             <h1 class="text-4xl font-black">Panel administrativo</h1>
             <p class="mt-3 max-w-2xl text-lg leading-8 text-slate-700">
-              Sesión verificada. Desde aquí puedes revisar las preguntas pendientes enviadas por
-              estudiantes.
+              Sesión verificada. Desde aquí puedes revisar las preguntas enviadas por estudiantes.
             </p>
           </div>
 
@@ -16,7 +15,7 @@
             :to="{ name: 'admin-questions' }"
             class="inline-flex rounded-2xl bg-emerald-800 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
           >
-            Ver preguntas pendientes
+            Ver preguntas
           </RouterLink>
         </div>
       </div>

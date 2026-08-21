@@ -98,4 +98,9 @@ public class StudentQuestion {
     public QuestionAttachment getAttachment() {
         return attachment;
     }
+
+    public void transitionTo(StudentQuestionStatus status, Instant updatedAt) {
+        this.status = status;
+        this.updatedAt = updatedAt;
+    }
 }

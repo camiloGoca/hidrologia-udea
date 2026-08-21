@@ -252,14 +252,14 @@ Inicialmente queda en estado:
 
 El profesor podrá revisarla.
 
-Estados conceptuales previstos:
+Estados oficiales:
 
-* `PENDING`
-* `ANSWERED`
-* `PUBLISHED`
-* `REJECTED`
+* `PENDING`: pendiente de revisión o resolución.
+* `REJECTED`: revisada y descartada; no se elimina físicamente ni se elimina su imagen adjunta.
+* `ARCHIVED`: pregunta válida cerrada sin crear una nueva publicación.
+* `PUBLISHED`: pregunta que originó una publicación.
 
-Los nombres finales podrán ajustarse durante la implementación.
+Eliminar definitivamente una pregunta será una operación administrativa separada y futura.
 
 ---
 

@@ -12,12 +12,13 @@ export interface AdminQuestionSummary {
   id: number
   nickname: string | null
   section: AdminQuestionSection
+  status: AdminQuestionStatus
   questionPreview: string
   hasAttachment: boolean
   createdAt: string
 }
 
-export interface AdminPendingQuestionsResponse {
+export interface AdminQuestionsResponse {
   items: AdminQuestionSummary[]
   page: number
   size: number
@@ -42,4 +43,10 @@ export interface AdminQuestionDetail {
   updatedAt: string
   section: AdminQuestionSection
   attachment: AdminQuestionAttachment | null
+}
+
+export interface AdminQuestionStatusUpdateResponse {
+  id: number
+  status: AdminQuestionStatus
+  updatedAt: string
 }

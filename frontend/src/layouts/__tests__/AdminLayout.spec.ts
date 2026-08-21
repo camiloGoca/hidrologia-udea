@@ -1,8 +1,8 @@
 import { RouterLinkStub, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { signOut } from '@/services/firebase/authService'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import { signOut } from '@/services/firebase/authService'
 
 const routerPush = vi.hoisted(() => vi.fn<(route: unknown) => void>())
 
@@ -40,7 +40,7 @@ describe('AdminLayout', () => {
 
     expect(wrapper.text()).toContain('Hidrología UdeA')
     expect(wrapper.text()).toContain('Inicio')
-    expect(wrapper.text()).toContain('Preguntas pendientes')
+    expect(wrapper.text()).toContain('Preguntas')
     expect(wrapper.text()).toContain('Cerrar sesión')
   })
 

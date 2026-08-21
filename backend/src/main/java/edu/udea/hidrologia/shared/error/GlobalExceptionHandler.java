@@ -12,7 +12,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
+import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
 import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
@@ -51,10 +54,41 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
+    @ExceptionHandler(UnsupportedQuestionStatusFilterException.class)
+    ResponseEntity<ApiErrorResponse> handleUnsupportedQuestionStatusFilter(
+            UnsupportedQuestionStatusFilterException exception,
+            HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+
+        return ResponseEntity.status(status)
+                .body(new ApiErrorResponse(
+                        Instant.now(),
+                        status.value(),
+                        status.getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(InvalidQuestionStatusTransitionException.class)
+    ResponseEntity<ApiErrorResponse> handleInvalidQuestionStatusTransition(
+            InvalidQuestionStatusTransitionException exception,
+            HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+
+        return ResponseEntity.status(status)
+                .body(new ApiErrorResponse(
+                        Instant.now(),
+                        status.value(),
+                        status.getReasonPhrase(),
+                        exception.getMessage(),
+                        request.getRequestURI()));
+    }
+
     @ExceptionHandler({
             InvalidImageException.class,
             MissingServletRequestPartException.class,
-            HttpMessageNotReadableException.class
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class
     })
     ResponseEntity<ApiErrorResponse> handleBadRequest(Exception exception, HttpServletRequest request) {
         HttpStatus status = HttpStatus.BAD_REQUEST;

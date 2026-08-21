@@ -1,23 +1,87 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
-import { getQuestionById } from '@/services/api/adminService'
+import {
+  archiveQuestion,
+  getQuestionById,
+  rejectQuestion,
+  reopenQuestion,
+} from '@/services/api/adminService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminQuestionDetail } from '@/types/adminQuestion'
+import { adminQuestionStatusLabel } from '@/utils/adminQuestionStatus'
+
+type QuestionAction = 'archive' | 'reject' | 'reopen'
+
+const ACTION_CONFIG = {
+  archive: {
+    label: 'Archivar',
+    title: '¿Archivar esta pregunta?',
+    description: 'La pregunta se cerrará sin crear una publicación.',
+    confirmLabel: 'Archivar pregunta',
+    successMessage: 'La pregunta fue archivada.',
+    buttonClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
+    confirmClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
+  },
+  reject: {
+    label: 'Rechazar',
+    title: '¿Rechazar esta pregunta?',
+    description: 'La pregunta dejará de aparecer como pendiente, pero no se eliminará.',
+    confirmLabel: 'Rechazar pregunta',
+    successMessage: 'La pregunta fue rechazada.',
+    buttonClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+    confirmClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+  },
+  reopen: {
+    label: 'Reabrir',
+    title: '¿Reabrir esta pregunta?',
+    description: 'Volverá a la lista de preguntas pendientes.',
+    confirmLabel: 'Reabrir pregunta',
+    successMessage: 'La pregunta fue reabierta.',
+    buttonClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
+    confirmClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
+  },
+} as const
 
 const route = useRoute()
 const router = useRouter()
 const question = ref<AdminQuestionDetail | null>(null)
 const isLoading = ref(true)
 const hasError = ref(false)
+const pendingAction = ref<QuestionAction | null>(null)
+const isSubmittingAction = ref(false)
+const actionError = ref(false)
+const actionSuccessMessage = ref('')
+const cancelButton = ref<HTMLButtonElement | null>(null)
+let lastFocusedElement: HTMLElement | null = null
 
 const displayNickname = computed(() => question.value?.nickname ?? 'Anónimo')
+const currentActionConfig = computed(() =>
+  pendingAction.value ? ACTION_CONFIG[pendingAction.value] : null,
+)
+const availableActions = computed<QuestionAction[]>(() => {
+  if (!question.value) {
+    return []
+  }
 
-onMounted(() => {
-  void loadQuestion()
+  if (question.value.status === 'PENDING') {
+    return ['archive', 'reject']
+  }
+
+  if (question.value.status === 'ARCHIVED' || question.value.status === 'REJECTED') {
+    return ['reopen']
+  }
+
+  return []
 })
+const backRoute = computed(() => ({
+  name: 'admin-questions',
+  query: { estado: tabQueryForStatus(question.value?.status) ?? routeTabQuery() ?? 'pendientes' },
+}))
+
+void loadQuestion()
 
 async function loadQuestion() {
   const id = Number(route.params.id)
@@ -47,6 +111,82 @@ async function loadQuestion() {
   }
 }
 
+async function openConfirmation(action: QuestionAction) {
+  actionError.value = false
+  pendingAction.value = action
+  lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  await nextTick()
+  cancelButton.value?.focus()
+}
+
+function closeConfirmation() {
+  if (isSubmittingAction.value) {
+    return
+  }
+
+  pendingAction.value = null
+  lastFocusedElement?.focus()
+}
+
+async function confirmAction() {
+  if (!question.value || !pendingAction.value || isSubmittingAction.value) {
+    return
+  }
+
+  isSubmittingAction.value = true
+  actionError.value = false
+  actionSuccessMessage.value = ''
+
+  try {
+    const result = await runAction(pendingAction.value, question.value.id)
+    question.value = {
+      ...question.value,
+      status: result.status,
+      updatedAt: result.updatedAt,
+    }
+    actionSuccessMessage.value = ACTION_CONFIG[pendingAction.value].successMessage
+    pendingAction.value = null
+  } catch (error) {
+    if (isAdminAuthorizationError(error)) {
+      await signOut().catch(() => undefined)
+      await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
+      return
+    }
+
+    actionError.value = true
+  } finally {
+    isSubmittingAction.value = false
+  }
+}
+
+function runAction(action: QuestionAction, id: number) {
+  switch (action) {
+    case 'archive':
+      return archiveQuestion(id)
+    case 'reject':
+      return rejectQuestion(id)
+    case 'reopen':
+      return reopenQuestion(id)
+  }
+}
+
+function routeTabQuery(): string | null {
+  return typeof route.query.estado === 'string' ? route.query.estado : null
+}
+
+function tabQueryForStatus(status: AdminQuestionDetail['status'] | undefined): string | null {
+  switch (status) {
+    case 'PENDING':
+      return 'pendientes'
+    case 'ARCHIVED':
+      return 'archivadas'
+    case 'REJECTED':
+      return 'rechazadas'
+    default:
+      return null
+  }
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('es-CO', {
     dateStyle: 'medium',
@@ -59,10 +199,10 @@ function formatDate(value: string): string {
   <main class="px-5 py-10 sm:px-6">
     <section class="mx-auto max-w-5xl">
       <RouterLink
-        :to="{ name: 'admin-questions' }"
+        :to="backRoute"
         class="rounded-md text-sm font-black text-sky-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-700"
       >
-        Volver a preguntas pendientes
+        Volver a preguntas
       </RouterLink>
 
       <div
@@ -88,16 +228,50 @@ function formatDate(value: string): string {
         <header class="border-b border-slate-200 p-6 sm:p-8">
           <div class="flex flex-wrap items-center gap-2 text-xs font-black uppercase">
             <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">
-              {{ question.status }}
+              {{ adminQuestionStatusLabel(question.status) }}
             </span>
             <span class="rounded-full bg-sky-100 px-3 py-1 text-sky-950">
               {{ question.section.name }}
             </span>
           </div>
 
-          <h1 class="mt-5 text-3xl font-black sm:text-4xl">Pregunta de estudiante</h1>
-          <p class="mt-3 text-sm font-bold text-slate-500">
-            {{ displayNickname }} · {{ formatDate(question.createdAt) }}
+          <div class="mt-5 flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 class="text-3xl font-black sm:text-4xl">Pregunta de estudiante</h1>
+              <p class="mt-3 text-sm font-bold text-slate-500">
+                {{ displayNickname }} · {{ formatDate(question.createdAt) }}
+              </p>
+            </div>
+
+            <div v-if="availableActions.length > 0" class="flex flex-wrap gap-3">
+              <button
+                v-for="action in availableActions"
+                :key="action"
+                type="button"
+                class="rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:bg-slate-400"
+                :class="ACTION_CONFIG[action].buttonClass"
+                :disabled="isSubmittingAction"
+                @click="openConfirmation(action)"
+              >
+                {{ ACTION_CONFIG[action].label }}
+              </button>
+            </div>
+          </div>
+
+          <p
+            v-if="actionSuccessMessage"
+            class="mt-5 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900"
+            role="status"
+          >
+            {{ actionSuccessMessage }}
+          </p>
+
+          <p
+            v-if="actionError"
+            class="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900"
+            role="alert"
+          >
+            No pudimos completar la acción. Intenta nuevamente en unos momentos.
           </p>
         </header>
 
@@ -134,5 +308,45 @@ function formatDate(value: string): string {
         </div>
       </article>
     </section>
+
+    <div
+      v-if="pendingAction && currentActionConfig"
+      class="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-5 py-8"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="question-action-title"
+      aria-describedby="question-action-description"
+      @keydown.esc.prevent="closeConfirmation"
+    >
+      <section class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <h2 id="question-action-title" class="text-2xl font-black text-slate-950">
+          {{ currentActionConfig.title }}
+        </h2>
+        <p id="question-action-description" class="mt-3 leading-7 text-slate-700">
+          {{ currentActionConfig.description }}
+        </p>
+
+        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            ref="cancelButton"
+            type="button"
+            class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
+            :disabled="isSubmittingAction"
+            @click="closeConfirmation"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:bg-slate-400"
+            :class="currentActionConfig.confirmClass"
+            :disabled="isSubmittingAction"
+            @click="confirmAction"
+          >
+            {{ isSubmittingAction ? 'Procesando...' : currentActionConfig.confirmLabel }}
+          </button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>

@@ -1,35 +1,74 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
-import { getPendingQuestions } from '@/services/api/adminService'
+import { getQuestionsByStatus } from '@/services/api/adminService'
 import { signOut } from '@/services/firebase/authService'
-import type { AdminPendingQuestionsResponse } from '@/types/adminQuestion'
+import type { AdminQuestionStatus, AdminQuestionsResponse } from '@/types/adminQuestion'
+import { adminQuestionStatusLabel } from '@/utils/adminQuestionStatus'
 
 const PAGE_SIZE = 20
 
+const QUESTION_TABS = [
+  {
+    query: 'pendientes',
+    label: 'Pendientes',
+    status: 'PENDING',
+    emptyMessage: 'No hay preguntas pendientes.',
+    loadingMessage: 'Cargando preguntas pendientes...',
+  },
+  {
+    query: 'archivadas',
+    label: 'Archivadas',
+    status: 'ARCHIVED',
+    emptyMessage: 'No hay preguntas archivadas.',
+    loadingMessage: 'Cargando preguntas archivadas...',
+  },
+  {
+    query: 'rechazadas',
+    label: 'Rechazadas',
+    status: 'REJECTED',
+    emptyMessage: 'No hay preguntas rechazadas.',
+    loadingMessage: 'Cargando preguntas rechazadas...',
+  },
+] as const
+
+type QuestionTab = (typeof QUESTION_TABS)[number]
+type ListableQuestionStatus = Exclude<AdminQuestionStatus, 'PUBLISHED'>
+
+const route = useRoute()
 const router = useRouter()
-const response = ref<AdminPendingQuestionsResponse | null>(null)
+const response = ref<AdminQuestionsResponse | null>(null)
 const isLoading = ref(true)
 const hasError = ref(false)
 
+const activeTab = computed(() => findTab(route.query.estado) ?? QUESTION_TABS[0])
 const items = computed(() => response.value?.items ?? [])
 const currentPage = computed(() => response.value?.page ?? 0)
 const totalPages = computed(() => response.value?.totalPages ?? 0)
 const hasMultiplePages = computed(() => totalPages.value > 1)
 const isEmpty = computed(() => !isLoading.value && !hasError.value && items.value.length === 0)
 
-onMounted(() => {
-  void loadQuestions(0)
-})
+watch(
+  () => route.query.estado,
+  (estado) => {
+    if (estado && !findTab(estado)) {
+      void router.replace({ name: 'admin-questions', query: { estado: 'pendientes' } })
+      return
+    }
+
+    void loadQuestions(0)
+  },
+  { immediate: true },
+)
 
 async function loadQuestions(page: number) {
   isLoading.value = true
   hasError.value = false
 
   try {
-    response.value = await getPendingQuestions(page, PAGE_SIZE)
+    response.value = await getQuestionsByStatus(activeTab.value.status as ListableQuestionStatus, page, PAGE_SIZE)
   } catch (error) {
     if (isAdminAuthorizationError(error)) {
       await signOut().catch(() => undefined)
@@ -56,6 +95,14 @@ function nextPage() {
   }
 }
 
+function findTab(value: unknown): QuestionTab | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  return QUESTION_TABS.find((tab) => tab.query === value)
+}
+
 function displayNickname(nickname: string | null): string {
   return nickname ?? 'Anónimo'
 }
@@ -73,18 +120,39 @@ function formatDate(value: string): string {
     <section class="mx-auto max-w-6xl">
       <header class="max-w-3xl">
         <p class="text-sm font-black uppercase text-emerald-700">Preguntas</p>
-        <h1 class="mt-3 text-4xl font-black">Preguntas pendientes</h1>
+        <h1 class="mt-3 text-4xl font-black">Preguntas recibidas</h1>
         <p class="mt-4 text-lg leading-8 text-slate-700">
-          Revisa las dudas enviadas por estudiantes antes de convertirlas en contenido académico.
+          Revisa, archiva o rechaza las dudas enviadas por estudiantes antes de convertirlas en
+          contenido académico.
         </p>
       </header>
+
+      <nav
+        class="mt-8 flex flex-wrap gap-3"
+        aria-label="Estado de preguntas"
+      >
+        <RouterLink
+          v-for="tab in QUESTION_TABS"
+          :key="tab.query"
+          :to="{ name: 'admin-questions', query: { estado: tab.query } }"
+          class="rounded-2xl px-5 py-3 text-sm font-black transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
+          :class="
+            activeTab.query === tab.query
+              ? 'bg-emerald-700 text-white shadow-sm'
+              : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-emerald-50 hover:text-emerald-900'
+          "
+          :aria-current="activeTab.query === tab.query ? 'page' : undefined"
+        >
+          {{ tab.label }}
+        </RouterLink>
+      </nav>
 
       <div
         v-if="isLoading"
         class="mt-8 rounded-3xl border border-sky-100 bg-sky-50 px-6 py-10 text-center font-bold text-sky-950"
         role="status"
       >
-        Cargando preguntas pendientes...
+        {{ activeTab.loadingMessage }}
       </div>
 
       <div
@@ -100,7 +168,7 @@ function formatDate(value: string): string {
         v-else-if="isEmpty"
         class="mt-8 rounded-3xl border border-emerald-100 bg-emerald-50 px-6 py-10 text-center text-lg font-bold text-emerald-950"
       >
-        No hay preguntas pendientes.
+        {{ activeTab.emptyMessage }}
       </div>
 
       <template v-else>
@@ -114,7 +182,7 @@ function formatDate(value: string): string {
               <div>
                 <div class="flex flex-wrap items-center gap-2 text-xs font-black uppercase">
                   <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">
-                    PENDIENTE
+                    {{ adminQuestionStatusLabel(question.status) }}
                   </span>
                   <span class="rounded-full bg-sky-100 px-3 py-1 text-sky-950">
                     {{ question.section.name }}
@@ -136,7 +204,11 @@ function formatDate(value: string): string {
               </div>
 
               <RouterLink
-                :to="{ name: 'admin-question-detail', params: { id: question.id } }"
+                :to="{
+                  name: 'admin-question-detail',
+                  params: { id: question.id },
+                  query: { estado: activeTab.query },
+                }"
                 class="inline-flex shrink-0 rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950"
               >
                 Ver pregunta
@@ -148,7 +220,7 @@ function formatDate(value: string): string {
         <nav
           v-if="hasMultiplePages"
           class="mt-8 flex flex-col items-center justify-between gap-4 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:flex-row"
-          aria-label="Paginación de preguntas pendientes"
+          :aria-label="`Paginación de preguntas ${activeTab.label.toLowerCase()}`"
         >
           <button
             type="button"

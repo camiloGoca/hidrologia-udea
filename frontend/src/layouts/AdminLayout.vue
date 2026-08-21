@@ -43,7 +43,7 @@ async function logout() {
             :to="{ name: 'admin-questions' }"
             class="rounded-2xl px-4 py-2 text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
           >
-            Preguntas pendientes
+            Preguntas
           </RouterLink>
           <button
             type="button"

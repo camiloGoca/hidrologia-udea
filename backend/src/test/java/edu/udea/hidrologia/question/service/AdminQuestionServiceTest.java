@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,8 +23,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import edu.udea.hidrologia.question.dto.AdminPendingQuestionsResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionDetailResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
+import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -35,6 +38,7 @@ import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 class AdminQuestionServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant UPDATED_AT = Instant.parse("2026-01-02T00:00:00Z");
 
     @Mock
     private StudentQuestionRepository studentQuestionRepository;
@@ -43,7 +47,8 @@ class AdminQuestionServiceTest {
 
     @BeforeEach
     void setUp() {
-        adminQuestionService = new AdminQuestionService(studentQuestionRepository);
+        Clock clock = Clock.fixed(UPDATED_AT, ZoneOffset.UTC);
+        adminQuestionService = new AdminQuestionService(studentQuestionRepository, clock);
     }
 
     @Test
@@ -52,7 +57,7 @@ class AdminQuestionServiceTest {
         when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
+        AdminQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
 
         assertThat(response.items()).isEmpty();
         assertThat(response.page()).isZero();
@@ -62,39 +67,58 @@ class AdminQuestionServiceTest {
     }
 
     @Test
-    void returnsOnlyPendingQuestionsMappedAsSummaries() {
-        StudentQuestion anonymousQuestion = question(1L, null, "Pregunta corta", StudentQuestionStatus.PENDING, NOW);
-        StudentQuestion questionWithAttachment = withAttachment(question(
+    void returnsQuestionsByAllowedStatusMappedAsSummaries() {
+        StudentQuestion archivedQuestion = withAttachment(question(
                 2L,
                 "Goca",
-                "Pregunta con imagen",
-                StudentQuestionStatus.PENDING,
+                "Pregunta archivada",
+                StudentQuestionStatus.ARCHIVED,
                 NOW.plusSeconds(60)));
         PageRequest pageRequest = pageRequest(0, 20);
-        when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
-                .thenReturn(new PageImpl<>(List.of(questionWithAttachment, anonymousQuestion), pageRequest, 2));
+        when(studentQuestionRepository.findByStatus(StudentQuestionStatus.ARCHIVED, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(archivedQuestion), pageRequest, 1));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.ARCHIVED,
+                0,
+                20);
 
-        assertThat(response.items()).hasSize(2);
+        assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).id()).isEqualTo(2L);
         assertThat(response.items().get(0).nickname()).isEqualTo("Goca");
+        assertThat(response.items().get(0).status()).isEqualTo(StudentQuestionStatus.ARCHIVED);
         assertThat(response.items().get(0).hasAttachment()).isTrue();
         assertThat(response.items().get(0).section().slug()).isEqualTo("taller-1");
-        assertThat(response.items().get(1).nickname()).isNull();
-        assertThat(response.items().get(1).hasAttachment()).isFalse();
     }
 
     @Test
-    void requestsPendingQuestionsOrderedByCreatedAtDescAndIdDesc() {
+    void listsPendingArchivedAndRejectedStatusesOnly() {
         PageRequest pageRequest = pageRequest(0, 20);
         when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.PENDING), eq(pageRequest)))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+        when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.ARCHIVED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+        when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.REJECTED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
 
-        adminQuestionService.findPendingQuestions(0, 20);
+        adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PENDING, 0, 20);
+        adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.ARCHIVED, 0, 20);
+        adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.REJECTED, 0, 20);
+
+        assertThatThrownBy(() -> adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PUBLISHED, 0, 20))
+                .isInstanceOf(UnsupportedQuestionStatusFilterException.class);
+    }
+
+    @Test
+    void requestsQuestionsOrderedByCreatedAtDescAndIdDesc() {
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.REJECTED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+
+        adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.REJECTED, 0, 20);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(studentQuestionRepository).findByStatus(eq(StudentQuestionStatus.PENDING), pageableCaptor.capture());
+        verify(studentQuestionRepository).findByStatus(eq(StudentQuestionStatus.REJECTED), pageableCaptor.capture());
 
         assertThat(pageableCaptor.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
         assertThat(pageableCaptor.getValue().getSort().getOrderFor("id").isDescending()).isTrue();
@@ -106,7 +130,10 @@ class AdminQuestionServiceTest {
         when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(-10, 500);
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.PENDING,
+                -10,
+                500);
 
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(50);
@@ -118,7 +145,10 @@ class AdminQuestionServiceTest {
         when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(1, 0);
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.PENDING,
+                1,
+                0);
 
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.size()).isEqualTo(20);
@@ -131,7 +161,10 @@ class AdminQuestionServiceTest {
         when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
                 .thenReturn(new PageImpl<>(List.of(question), pageRequest, 1));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.PENDING,
+                0,
+                20);
 
         assertThat(response.items().get(0).questionPreview()).isEqualTo("Pregunta corta");
     }
@@ -143,7 +176,10 @@ class AdminQuestionServiceTest {
         when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
                 .thenReturn(new PageImpl<>(List.of(question), pageRequest, 1));
 
-        AdminPendingQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.PENDING,
+                0,
+                20);
 
         assertThat(response.items().get(0).questionPreview()).hasSize(201);
         assertThat(response.items().get(0).questionPreview()).endsWith("\u2026");
@@ -185,6 +221,90 @@ class AdminQuestionServiceTest {
         assertThatThrownBy(() -> adminQuestionService.findQuestionById(404L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Question not found");
+    }
+
+    @Test
+    void rejectsPendingQuestion() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.PENDING, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(studentQuestionRepository.save(question)).thenReturn(question);
+
+        AdminQuestionStatusUpdateResponse response = adminQuestionService.rejectQuestion(1L);
+
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(StudentQuestionStatus.REJECTED);
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+    }
+
+    @Test
+    void archivesPendingQuestionAndKeepsAttachment() {
+        StudentQuestion question = withAttachment(question(1L, null, "Pregunta", StudentQuestionStatus.PENDING, NOW));
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(studentQuestionRepository.save(question)).thenReturn(question);
+
+        AdminQuestionStatusUpdateResponse response = adminQuestionService.archiveQuestion(1L);
+
+        assertThat(response.status()).isEqualTo(StudentQuestionStatus.ARCHIVED);
+        assertThat(question.getAttachment()).isNotNull();
+    }
+
+    @Test
+    void reopensRejectedQuestion() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.REJECTED, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(studentQuestionRepository.save(question)).thenReturn(question);
+
+        AdminQuestionStatusUpdateResponse response = adminQuestionService.reopenQuestion(1L);
+
+        assertThat(response.status()).isEqualTo(StudentQuestionStatus.PENDING);
+    }
+
+    @Test
+    void reopensArchivedQuestion() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.ARCHIVED, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(studentQuestionRepository.save(question)).thenReturn(question);
+
+        AdminQuestionStatusUpdateResponse response = adminQuestionService.reopenQuestion(1L);
+
+        assertThat(response.status()).isEqualTo(StudentQuestionStatus.PENDING);
+    }
+
+    @Test
+    void rejectsInvalidTransitionsWithConflictException() {
+        assertInvalidTransition(StudentQuestionStatus.REJECTED, "reject");
+        assertInvalidTransition(StudentQuestionStatus.ARCHIVED, "archive");
+        assertInvalidTransition(StudentQuestionStatus.REJECTED, "archive");
+        assertInvalidTransition(StudentQuestionStatus.ARCHIVED, "reject");
+        assertInvalidTransition(StudentQuestionStatus.PUBLISHED, "reject");
+        assertInvalidTransition(StudentQuestionStatus.PUBLISHED, "archive");
+        assertInvalidTransition(StudentQuestionStatus.PUBLISHED, "reopen");
+    }
+
+    @Test
+    void throwsNotFoundWhenTransitionQuestionDoesNotExist() {
+        when(studentQuestionRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminQuestionService.rejectQuestion(404L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Question not found");
+    }
+
+    private void assertInvalidTransition(StudentQuestionStatus currentStatus, String action) {
+        StudentQuestion question = question(1L, null, "Pregunta", currentStatus, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+
+        assertThatThrownBy(() -> runAction(action))
+                .isInstanceOf(InvalidQuestionStatusTransitionException.class);
+    }
+
+    private void runAction(String action) {
+        switch (action) {
+            case "reject" -> adminQuestionService.rejectQuestion(1L);
+            case "archive" -> adminQuestionService.archiveQuestion(1L);
+            case "reopen" -> adminQuestionService.reopenQuestion(1L);
+            default -> throw new IllegalArgumentException("Unknown action");
+        }
     }
 
     private StudentQuestion withAttachment(StudentQuestion question) {

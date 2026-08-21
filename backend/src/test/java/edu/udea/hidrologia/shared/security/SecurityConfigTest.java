@@ -263,4 +263,51 @@ class SecurityConfigTest {
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void protectsAdminQuestionActionWithoutToken() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/questions/1/reject"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnAdminQuestionAction() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/archive")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminQuestionAction() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/reopen")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void allowsAdminUidOnQuestionStatusActions() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/reject")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/archive")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/reopen")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+    }
 }
