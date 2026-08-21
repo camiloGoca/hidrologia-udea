@@ -23,8 +23,28 @@ describe('router', () => {
     expect(
       routes.some((route) => route.path === '/preguntas/nueva' && route.name === 'new-question'),
     ).toBe(true)
+    expect(routes.some((route) => route.path === '/admin' && route.name === 'admin-home')).toBe(
+      true,
+    )
+    expect(
+      routes.some((route) => route.path === '/admin/preguntas' && route.name === 'admin-questions'),
+    ).toBe(true)
+    expect(
+      routes.some(
+        (route) =>
+          route.path === '/admin/preguntas/:id' && route.name === 'admin-question-detail',
+      ),
+    ).toBe(true)
     expect(
       routes.some((route) => route.path === '/:pathMatch(.*)*' && route.name === 'not-found'),
     ).toBe(true)
+  })
+
+  it('protects administrative routes with the admin guard', () => {
+    const adminRoute = router.resolve('/admin/preguntas')
+    const detailRoute = router.resolve('/admin/preguntas/1')
+
+    expect(adminRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
+    expect(detailRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
   })
 })

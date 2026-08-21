@@ -32,6 +32,7 @@ import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
+import edu.udea.hidrologia.question.service.AdminQuestionService;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
@@ -55,6 +56,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StudentQuestionService studentQuestionService;
+
+    @MockitoBean
+    private AdminQuestionService adminQuestionService;
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;
@@ -209,5 +213,54 @@ class SecurityConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.authenticated").value(true))
                 .andExpect(jsonPath("$.role").value("ADMIN"));
+    }
+
+    @Test
+    void protectsPendingAdminQuestionsEndpointWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/questions/pending"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnAdminQuestionsEndpoint() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(get("/api/v1/admin/questions/pending")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminQuestionsEndpoint() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/questions/pending")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void allowsAdminUidOnPendingAdminQuestionsEndpoint() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/questions/pending")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsAdminUidOnQuestionDetailEndpoint() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/questions/1")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
     }
 }

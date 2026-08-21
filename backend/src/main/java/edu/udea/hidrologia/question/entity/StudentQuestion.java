@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -42,6 +43,9 @@ public class StudentQuestion {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @OneToOne(mappedBy = "question", fetch = FetchType.LAZY)
+    private QuestionAttachment attachment;
 
     protected StudentQuestion() {
     }
@@ -89,5 +93,9 @@ public class StudentQuestion {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public QuestionAttachment getAttachment() {
+        return attachment;
     }
 }
