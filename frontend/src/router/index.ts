@@ -2,10 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
 import PublicLayout from '@/layouts/PublicLayout.vue'
+import { requireAdmin } from '@/router/adminGuard'
 import LinksView from '@/views/static/LinksView.vue'
 import NewQuestionView from '@/views/static/NewQuestionView.vue'
 import NotFoundView from '@/views/static/NotFoundView.vue'
 import PostDetailView from '@/views/posts/PostDetailView.vue'
+import AdminLoginView from '@/views/admin/AdminLoginView.vue'
+import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
 import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
 import TalleresView from '@/views/sections/TalleresView.vue'
@@ -66,6 +69,17 @@ const router = createRouter({
           component: NewQuestionView,
         },
       ],
+    },
+    {
+      path: '/admin/login',
+      name: 'admin-login',
+      component: AdminLoginView,
+    },
+    {
+      path: '/admin',
+      name: 'admin-home',
+      component: AdminView,
+      beforeEnter: requireAdmin,
     },
     {
       path: '/:pathMatch(.*)*',

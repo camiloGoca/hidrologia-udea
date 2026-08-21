@@ -2,9 +2,11 @@ package edu.udea.hidrologia.shared.security;
 
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
@@ -33,9 +35,12 @@ import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
+import edu.udea.hidrologia.shared.firebase.FirebaseTokenVerificationException;
+import edu.udea.hidrologia.shared.firebase.FirebaseTokenVerifier;
+import edu.udea.hidrologia.shared.firebase.VerifiedFirebaseToken;
 import edu.udea.hidrologia.tag.dto.TagResponse;
 
-@SpringBootTest
+@SpringBootTest(properties = "hidrologia.firebase.admin-uid=admin-uid")
 @AutoConfigureMockMvc
 class SecurityConfigTest {
 
@@ -56,6 +61,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private QuestionAttachmentRepository questionAttachmentRepository;
+
+    @MockitoBean
+    private FirebaseTokenVerifier firebaseTokenVerifier;
 
     @Autowired
     private MockMvc mockMvc;
@@ -134,12 +142,72 @@ class SecurityConfigTest {
     @Test
     void deniesStandalonePublicImageUploadEndpoint() throws Exception {
         mockMvc.perform(post("/api/v1/images"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void deniesUnapprovedApiRoutes() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/links"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/internal"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsUnauthorizedForAdminEndpointWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsUnauthorizedForMalformedBearerHeader() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/me")
+                .header("Authorization", "Token invalid"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidBearerToken() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(get("/api/v1/admin/me")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsUnauthorizedForRevokedBearerToken() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("revoked-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Revoked token", new RuntimeException()));
+
+        mockMvc.perform(get("/api/v1/admin/me")
+                .header("Authorization", "Bearer revoked-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void returnsForbiddenForValidFirebaseTokenWithDifferentUid() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/me")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void allowsAdminEndpointForConfiguredAdminUid() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/me")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(true))
+                .andExpect(jsonPath("$.role").value("ADMIN"));
     }
 }
