@@ -21,6 +21,7 @@
         <java.version>17</java.version>
         <springdoc.version>3.1.0</springdoc.version>
         <cloudinary.version>2.4.0</cloudinary.version>
+        <firebase-admin.version>9.10.0</firebase-admin.version>
     </properties>
 
     <dependencies>
@@ -61,6 +62,11 @@
             <groupId>com.cloudinary</groupId>
             <artifactId>cloudinary-http5</artifactId>
             <version>${cloudinary.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>${firebase-admin.version}</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>

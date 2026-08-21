@@ -39,6 +39,10 @@ hidrologia:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
+  firebase:
+    enabled: ${FIREBASE_ENABLED:false}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    admin-uid: ${FIREBASE_ADMIN_UID:}
   uploads:
     images:
       max-size-bytes: ${QUESTION_IMAGE_MAX_BYTES:5242880}
