@@ -2,25 +2,32 @@ package edu.udea.hidrologia.post.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
-import edu.udea.hidrologia.post.dto.UpdatePostDraftRequest;
+import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.repository.PostRepository;
@@ -56,6 +63,100 @@ class AdminPostServiceTest {
     }
 
     @Test
+    void returnsPostsByStatusWithPaginationAndUpdatedAtOrder() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(postRepository.findByStatus(PostStatus.DRAFT, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(draft), pageRequest, 1));
+
+        AdminPostsResponse response = adminPostService.findPostsByStatus(PostStatus.DRAFT, 0, 20);
+
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).id()).isEqualTo(9L);
+        assertThat(response.items().get(0).title()).isEmpty();
+        assertThat(response.items().get(0).status()).isEqualTo(PostStatus.DRAFT);
+        assertThat(response.items().get(0).section().slug()).isEqualTo("taller-1");
+        assertThat(response.items().get(0).hasSourceQuestion()).isTrue();
+        assertThat(response.items().get(0).sourceQuestionId()).isEqualTo(1L);
+        assertThat(response.items().get(0).createdAt()).isEqualTo(NOW);
+        assertThat(response.items().get(0).updatedAt()).isEqualTo(NOW);
+        assertThat(response.items().get(0).publishedAt()).isNull();
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(20);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(postRepository).findByStatus(eq(PostStatus.DRAFT), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getSort().getOrderFor("updatedAt").isDescending()).isTrue();
+        assertThat(pageable.getSort().getOrderFor("id").isDescending()).isTrue();
+    }
+
+    @Test
+    void supportsPublishedAndArchivedAdminPostLists() {
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(postRepository.findByStatus(eq(PostStatus.PUBLISHED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+        when(postRepository.findByStatus(eq(PostStatus.ARCHIVED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+
+        adminPostService.findPostsByStatus(PostStatus.PUBLISHED, 0, 20);
+        adminPostService.findPostsByStatus(PostStatus.ARCHIVED, 0, 20);
+
+        verify(postRepository).findByStatus(PostStatus.PUBLISHED, pageRequest);
+        verify(postRepository).findByStatus(PostStatus.ARCHIVED, pageRequest);
+    }
+
+    @Test
+    void clampsInvalidPostListBounds() {
+        PageRequest pageRequest = pageRequest(0, 50);
+        when(postRepository.findByStatus(PostStatus.PUBLISHED, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+
+        AdminPostsResponse response = adminPostService.findPostsByStatus(PostStatus.PUBLISHED, -2, 100);
+
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(50);
+        verify(postRepository).findByStatus(PostStatus.PUBLISHED, pageRequest);
+    }
+
+    @Test
+    void usesDefaultSizeWhenPostListSizeIsInvalid() {
+        PageRequest pageRequest = pageRequest(1, 20);
+        when(postRepository.findByStatus(PostStatus.ARCHIVED, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+
+        AdminPostsResponse response = adminPostService.findPostsByStatus(PostStatus.ARCHIVED, 1, 0);
+
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(20);
+        verify(postRepository).findByStatus(PostStatus.ARCHIVED, pageRequest);
+    }
+
+    @Test
+    void listSupportsSourceQuestionNullable() {
+        Post post = new Post(
+                11L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "Título",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                UPDATED_AT,
+                NOW,
+                Set.of(),
+                null);
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(postRepository.findByStatus(PostStatus.PUBLISHED, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(post), pageRequest, 1));
+
+        AdminPostsResponse response = adminPostService.findPostsByStatus(PostStatus.PUBLISHED, 0, 20);
+
+        assertThat(response.items().get(0).hasSourceQuestion()).isFalse();
+        assertThat(response.items().get(0).sourceQuestionId()).isNull();
+    }
+
+    @Test
     void returnsAdminPostWithSourceQuestionReference() {
         StudentQuestion question = withAttachment(question());
         Post draft = draftPost(question);
@@ -82,9 +183,9 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("parcial-1")).thenReturn(Optional.of(newSection));
 
-        AdminPostResponse response = adminPostService.updateDraft(
+        AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostDraftRequest("  Título  ", "  Línea 1\nLínea 2  ", "parcial-1"));
+                new UpdatePostRequest("  Título  ", "  Línea 1\nLínea 2  ", "parcial-1"));
 
         assertThat(response.title()).isEqualTo("Título");
         assertThat(response.content()).isEqualTo("Línea 1\nLínea 2");
@@ -100,7 +201,7 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("parcial-1")).thenReturn(Optional.of(newSection));
 
-        adminPostService.updateDraft(9L, new UpdatePostDraftRequest("Título", "Contenido", "parcial-1"));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Título", "Contenido", "parcial-1"));
 
         assertThat(draft.getSection().getSlug()).isEqualTo("parcial-1");
         assertThat(question.getSection().getSlug()).isEqualTo("taller-1");
@@ -113,9 +214,9 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
 
-        AdminPostResponse response = adminPostService.updateDraft(
+        AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostDraftRequest("   ", "   ", "taller-1"));
+                new UpdatePostRequest("   ", "   ", "taller-1"));
 
         assertThat(response.title()).isEmpty();
         assertThat(response.content()).isEmpty();
@@ -139,43 +240,121 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
 
-        adminPostService.updateDraft(9L, new UpdatePostDraftRequest("Título", "Contenido", "taller-1"));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Título", "Contenido", "taller-1"));
 
         assertThat(draft.getTags()).containsExactly(tag);
     }
 
     @Test
-    void throwsConflictWhenUpdatingPublishedOrArchivedPost() {
+    void updatesPublishedPostAndPreservesStatusPublishedAtAndQuestion() {
         StudentQuestion question = question();
-        for (PostStatus status : new PostStatus[] { PostStatus.PUBLISHED, PostStatus.ARCHIVED }) {
-            Post post = new Post(
-                    9L,
-                    question.getSection(),
-                    "Título",
-                    "Contenido",
-                    status,
-                    NOW,
-                    NOW,
-                    status == PostStatus.PUBLISHED ? NOW : null,
-                    Set.of(),
-                    question);
-            when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        question.transitionTo(StudentQuestionStatus.PUBLISHED, NOW);
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        Section newSection = section(2L, SectionType.PARCIAL, "Parcial 1", "parcial-1");
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("parcial-1")).thenReturn(Optional.of(newSection));
 
-            assertThatThrownBy(() -> adminPostService.updateDraft(
-                    9L,
-                    new UpdatePostDraftRequest("Nuevo", "Contenido", "taller-1")))
-                    .isInstanceOf(PostStateConflictException.class);
-        }
-        verifyNoInteractions(sectionRepository);
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("  Nuevo título  ", "  Línea 1\nLínea 2  ", "parcial-1"));
+
+        assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(response.publishedAt()).isEqualTo(NOW);
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+        assertThat(response.content()).isEqualTo("Línea 1\nLínea 2");
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(question.getSection().getSlug()).isEqualTo("taller-1");
+    }
+
+    @Test
+    void rejectsBlankPublishedPostUpdate() {
+        StudentQuestion question = question();
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("  ", "Contenido", "taller-1")))
+                .isInstanceOf(InvalidPostPublicationException.class);
+    }
+
+    @Test
+    void updatesArchivedPostAndPreservesStatusAndPublishedAt() {
+        StudentQuestion question = question();
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Archivada", "Contenido", "taller-1"));
+
+        assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
+        assertThat(response.publishedAt()).isEqualTo(NOW);
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+    }
+
+    @Test
+    void rejectsBlankArchivedPostUpdate() {
+        StudentQuestion question = question();
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Título", "  ", "taller-1")))
+                .isInstanceOf(InvalidPostPublicationException.class);
     }
 
     @Test
     void throwsNotFoundWhenDraftUpdatePostDoesNotExist() {
         when(postRepository.findAdminById(404L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> adminPostService.updateDraft(
+        assertThatThrownBy(() -> adminPostService.updatePost(
                 404L,
-                new UpdatePostDraftRequest("Título", "Contenido", "taller-1")))
+                new UpdatePostRequest("Título", "Contenido", "taller-1")))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Post not found");
     }
@@ -186,9 +365,9 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draftPost(question)));
         when(sectionRepository.findBySlugAndActiveTrue("inactiva")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> adminPostService.updateDraft(
+        assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostDraftRequest("Título", "Contenido", "inactiva")))
+                new UpdatePostRequest("Título", "Contenido", "inactiva")))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Section not found");
     }
@@ -275,5 +454,14 @@ class AdminPostServiceTest {
                 id.intValue(),
                 true,
                 NOW);
+    }
+
+    private PageRequest pageRequest(int page, int size) {
+        return PageRequest.of(
+                page,
+                size,
+                org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Order.desc("updatedAt"),
+                        org.springframework.data.domain.Sort.Order.desc("id")));
     }
 }

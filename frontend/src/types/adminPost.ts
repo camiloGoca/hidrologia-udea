@@ -24,7 +24,27 @@ export interface AdminPost {
   publishedAt: string | null
 }
 
-export interface UpdateAdminPostDraftRequest {
+export interface AdminPostSummary {
+  id: number
+  title: string
+  status: AdminPostStatus
+  section: AdminQuestionSection
+  hasSourceQuestion: boolean
+  sourceQuestionId: number | null
+  createdAt: string
+  updatedAt: string
+  publishedAt: string | null
+}
+
+export interface AdminPostsResponse {
+  items: AdminPostSummary[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface UpdateAdminPostRequest {
   title: string
   content: string
   sectionSlug: string

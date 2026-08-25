@@ -118,11 +118,8 @@ public class Post {
                 question);
     }
 
-    public void updateDraft(String title, String content, Section section, Instant updatedAt) {
-        if (status != PostStatus.DRAFT) {
-            throw new IllegalStateException("Only draft posts can be edited");
-        }
-
+    public void update(String title, String content, Section section, Instant updatedAt) {
+        validateEditorialContent(title, content, status);
         this.title = title;
         this.content = content;
         this.section = section;
@@ -138,6 +135,25 @@ public class Post {
         this.status = PostStatus.PUBLISHED;
         this.publishedAt = publishedAt;
         this.updatedAt = publishedAt;
+    }
+
+    public void archive(Instant updatedAt) {
+        if (status != PostStatus.PUBLISHED) {
+            throw new IllegalStateException("Only published posts can be archived");
+        }
+
+        this.status = PostStatus.ARCHIVED;
+        this.updatedAt = updatedAt;
+    }
+
+    public void restore(Instant updatedAt) {
+        if (status != PostStatus.ARCHIVED) {
+            throw new IllegalStateException("Only archived posts can be restored");
+        }
+
+        validateEditorialContent(title, content, PostStatus.PUBLISHED);
+        this.status = PostStatus.PUBLISHED;
+        this.updatedAt = updatedAt;
     }
 
     public Long getId() {

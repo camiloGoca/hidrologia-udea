@@ -104,6 +104,171 @@ class AdminPostPublicationServiceTest {
     }
 
     @Test
+    void archivesPublishedPostWithoutChangingPublishedAtOrSourceQuestion() {
+        StudentQuestion question = question(StudentQuestionStatus.PUBLISHED);
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                CREATED_AT,
+                CREATED_AT,
+                CREATED_AT,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        AdminPostResponse response = publicationService.archivePost(9L);
+
+        assertThat(post.getStatus()).isEqualTo(PostStatus.ARCHIVED);
+        assertThat(post.getPublishedAt()).isEqualTo(CREATED_AT);
+        assertThat(post.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
+        assertThat(response.publishedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void rejectsArchiveWhenPostIsDraftOrArchived() {
+        for (PostStatus status : new PostStatus[] { PostStatus.DRAFT, PostStatus.ARCHIVED }) {
+            Post post = new Post(
+                    9L,
+                    section(),
+                    status == PostStatus.DRAFT ? "" : "Título",
+                    status == PostStatus.DRAFT ? "" : "Contenido",
+                    status,
+                    CREATED_AT,
+                    CREATED_AT,
+                    status == PostStatus.ARCHIVED ? CREATED_AT : null,
+                    Set.of(),
+                    null);
+            when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+            assertThatThrownBy(() -> publicationService.archivePost(9L))
+                    .isInstanceOf(PostStateConflictException.class)
+                    .hasMessage("Only published posts can be archived");
+        }
+    }
+
+    @Test
+    void throwsNotFoundWhenArchivingMissingPost() {
+        when(postRepository.findAdminById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> publicationService.archivePost(404L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Post not found");
+    }
+
+    @Test
+    void restoresArchivedPostWithoutChangingPublishedAtOrSourceQuestion() {
+        StudentQuestion question = question(StudentQuestionStatus.PUBLISHED);
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Título",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                CREATED_AT,
+                CREATED_AT,
+                CREATED_AT,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        AdminPostResponse response = publicationService.restorePost(9L);
+
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(post.getPublishedAt()).isEqualTo(CREATED_AT);
+        assertThat(post.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(response.publishedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void rejectsRestoreWhenPostIsDraftOrPublished() {
+        for (PostStatus status : new PostStatus[] { PostStatus.DRAFT, PostStatus.PUBLISHED }) {
+            Post post = new Post(
+                    9L,
+                    section(),
+                    status == PostStatus.DRAFT ? "" : "Título",
+                    status == PostStatus.DRAFT ? "" : "Contenido",
+                    status,
+                    CREATED_AT,
+                    CREATED_AT,
+                    status == PostStatus.PUBLISHED ? CREATED_AT : null,
+                    Set.of(),
+                    null);
+            when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+            assertThatThrownBy(() -> publicationService.restorePost(9L))
+                    .isInstanceOf(PostStateConflictException.class)
+                    .hasMessage("Only archived posts can be restored");
+        }
+    }
+
+    @Test
+    void rejectsRestoreWhenArchivedPostHasInvalidContent() {
+        Post post = new Post(
+                9L,
+                section(),
+                "   ",
+                "Contenido",
+                PostStatus.DRAFT,
+                CREATED_AT,
+                CREATED_AT,
+                null,
+                Set.of(),
+                null);
+        post.update("   ", "Contenido", section(), CREATED_AT);
+        org.springframework.test.util.ReflectionTestUtils.setField(post, "status", PostStatus.ARCHIVED);
+        org.springframework.test.util.ReflectionTestUtils.setField(post, "publishedAt", CREATED_AT);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        assertThatThrownBy(() -> publicationService.restorePost(9L))
+                .isInstanceOf(InvalidPostPublicationException.class);
+    }
+
+    @Test
+    void rejectsRestoreWhenArchivedPostSectionIsInactive() {
+        Section inactiveSection = new Section(
+                2L,
+                SectionType.TALLER,
+                "Taller inactivo",
+                "taller-inactivo",
+                "Inactiva",
+                2,
+                false,
+                CREATED_AT);
+        Post post = new Post(
+                9L,
+                inactiveSection,
+                "Título",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                CREATED_AT,
+                CREATED_AT,
+                CREATED_AT,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        assertThatThrownBy(() -> publicationService.restorePost(9L))
+                .isInstanceOf(InvalidPostPublicationException.class)
+                .hasMessage("La publicación debe tener una sección activa.");
+    }
+
+    @Test
+    void throwsNotFoundWhenRestoringMissingPost() {
+        when(postRepository.findAdminById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> publicationService.restorePost(404L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Post not found");
+    }
+
+    @Test
     void rejectsPublishWhenTitleOrContentIsBlank() {
         StudentQuestion question = question(StudentQuestionStatus.PENDING);
         Post draft = draftPost(question, "   ", "Contenido");
@@ -111,7 +276,7 @@ class AdminPostPublicationServiceTest {
 
         assertThatThrownBy(() -> publicationService.publishDraft(9L))
                 .isInstanceOf(InvalidPostPublicationException.class)
-                .hasMessage("El borrador necesita título y contenido antes de publicarse.");
+                .hasMessage("La publicación necesita título y contenido antes de publicarse.");
     }
 
     @Test

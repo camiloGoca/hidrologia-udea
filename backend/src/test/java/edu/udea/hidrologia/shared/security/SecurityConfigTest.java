@@ -30,6 +30,7 @@ import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
+import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostService;
@@ -405,7 +406,10 @@ class SecurityConfigTest {
     }
 
     @Test
-    void protectsAdminPostUpdateAndPublishWithoutToken() throws Exception {
+    void protectsAdminPostListUpdateAndActionsWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/posts"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
@@ -413,12 +417,22 @@ class SecurityConfigTest {
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/archive"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/restore"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void returnsUnauthorizedForInvalidTokenOnAdminPostUpdateAndPublish() throws Exception {
+    void returnsUnauthorizedForInvalidTokenOnAdminPostListUpdateAndActions() throws Exception {
         when(firebaseTokenVerifier.verify(eq("invalid-token")))
                 .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(get("/api/v1/admin/posts")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer invalid-token")
@@ -429,12 +443,24 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
                 .header("Authorization", "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/archive")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/restore")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void returnsForbiddenForNonAdminUidOnAdminPostUpdateAndPublish() throws Exception {
+    void returnsForbiddenForNonAdminUidOnAdminPostListUpdateAndActions() throws Exception {
         when(firebaseTokenVerifier.verify(eq("other-user-token")))
                 .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/posts")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer other-user-token")
@@ -445,12 +471,26 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
                 .header("Authorization", "Bearer other-user-token"))
                 .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/archive")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/restore")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void allowsAdminUidOnAdminPostUpdateAndPublish() throws Exception {
+    void allowsAdminUidOnAdminPostListUpdateAndActions() throws Exception {
         when(firebaseTokenVerifier.verify(eq("admin-token")))
                 .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+        when(adminPostService.findPostsByStatus(PostStatus.DRAFT, 0, 20))
+                .thenReturn(new AdminPostsResponse(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/v1/admin/posts")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer admin-token")
@@ -465,6 +505,14 @@ class SecurityConfigTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/archive")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/restore")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
     }

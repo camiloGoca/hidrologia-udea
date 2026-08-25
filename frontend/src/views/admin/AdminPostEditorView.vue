@@ -4,16 +4,20 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
-  discardQuestionDraft,
+  archiveAdminPost,
   getAdminPost,
   publishAdminPost,
-  updateAdminPostDraft,
-} from '@/services/api/adminService'
+  restoreAdminPost,
+  updateAdminPost,
+} from '@/services/api/adminPostService'
+import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminPost } from '@/types/adminPost'
 import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
+
+type ConfirmationAction = 'discard' | 'publish' | 'archive' | 'restore'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,17 +25,13 @@ const post = ref<AdminPost | null>(null)
 const sections = ref<Section[]>([])
 const isLoading = ref(true)
 const hasError = ref(false)
-const isDiscardModalOpen = ref(false)
-const isPublishModalOpen = ref(false)
-const isSubmittingDiscard = ref(false)
+const pendingAction = ref<ConfirmationAction | null>(null)
+const isSubmittingAction = ref(false)
 const isSaving = ref(false)
-const isPublishing = ref(false)
-const discardError = ref(false)
+const actionError = ref(false)
 const saveError = ref(false)
-const publishError = ref(false)
-const saveSuccess = ref(false)
+const successMessage = ref('')
 const cancelButton = ref<HTMLButtonElement | null>(null)
-const publishCancelButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
 const form = reactive({
   title: '',
@@ -47,32 +47,93 @@ const saved = reactive({
 const sourceQuestion = computed(() => post.value?.sourceQuestion ?? null)
 const displayNickname = computed(() => sourceQuestion.value?.nickname ?? 'Anónimo')
 const displayTitle = computed(() => post.value?.title.trim() || 'Sin título')
-const displayContent = computed(() => post.value?.content.trim() || 'Sin contenido todavía')
 const workshopSections = computed(() => sectionsByType('TALLER'))
 const examSections = computed(() => sectionsByType('PARCIAL'))
 const isDraft = computed(() => post.value?.status === 'DRAFT')
 const isPublished = computed(() => post.value?.status === 'PUBLISHED')
-const isBusy = computed(() => isSaving.value || isPublishing.value || isSubmittingDiscard.value)
+const isArchived = computed(() => post.value?.status === 'ARCHIVED')
+const isBusy = computed(() => isSaving.value || isSubmittingAction.value)
 const isDirty = computed(
   () =>
     form.title !== saved.title ||
     form.content !== saved.content ||
     form.sectionSlug !== saved.sectionSlug,
 )
-const canSave = computed(() => isDraft.value && isDirty.value && !isBusy.value)
+const hasRequiredPublishedContent = computed(
+  () => form.title.trim().length > 0 && form.content.trim().length > 0,
+)
+const canSave = computed(() => {
+  if (!post.value || !isDirty.value || isBusy.value) {
+    return false
+  }
+
+  return isDraft.value || hasRequiredPublishedContent.value
+})
 const canPublish = computed(
-  () =>
-    isDraft.value &&
-    !isDirty.value &&
-    form.title.trim().length > 0 &&
-    form.content.trim().length > 0 &&
-    !isBusy.value,
+  () => isDraft.value && !isDirty.value && hasRequiredPublishedContent.value && !isBusy.value,
 )
-const questionRoute = computed(() =>
-  sourceQuestion.value
-    ? { name: 'admin-question-detail', params: { id: sourceQuestion.value.id } }
-    : { name: 'admin-questions' },
+const canArchive = computed(() => isPublished.value && !isDirty.value && !isBusy.value)
+const canRestore = computed(
+  () => isArchived.value && !isDirty.value && hasRequiredPublishedContent.value && !isBusy.value,
 )
+const saveButtonLabel = computed(() => (isDraft.value ? 'Guardar borrador' : 'Guardar cambios'))
+const savingLabel = computed(() => (isDraft.value ? 'Guardando...' : 'Actualizando...'))
+const statusHelpMessage = computed(() => {
+  if (isDirty.value) {
+    if (isPublished.value) {
+      return 'Guarda los cambios antes de archivar.'
+    }
+
+    if (isArchived.value) {
+      return 'Guarda los cambios antes de restaurar.'
+    }
+
+    return 'Guarda los cambios antes de publicar.'
+  }
+
+  if (!isDraft.value && !hasRequiredPublishedContent.value) {
+    return 'Título y contenido son obligatorios para publicaciones publicadas o archivadas.'
+  }
+
+  return ''
+})
+const confirmationConfig = computed(() => {
+  switch (pendingAction.value) {
+    case 'discard':
+      return {
+        title: '¿Descartar este borrador?',
+        description:
+          'El borrador se eliminará. La pregunta original y su imagen permanecerán intactas y seguirán pendientes.',
+        confirmLabel: 'Descartar borrador',
+        confirmClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+      }
+    case 'publish':
+      return {
+        title: '¿Publicar esta publicación?',
+        description:
+          'Será visible para los estudiantes y la pregunta de origen quedará marcada como publicada.',
+        confirmLabel: 'Publicar',
+        confirmClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
+      }
+    case 'archive':
+      return {
+        title: '¿Archivar esta publicación?',
+        description:
+          'La publicación dejará de ser visible para los estudiantes, pero se conservará en el panel administrativo.',
+        confirmLabel: 'Archivar publicación',
+        confirmClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+      }
+    case 'restore':
+      return {
+        title: '¿Restaurar esta publicación?',
+        description: 'Volverá a ser visible para los estudiantes.',
+        confirmLabel: 'Restaurar publicación',
+        confirmClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
+      }
+    default:
+      return null
+  }
+})
 
 void loadPost()
 
@@ -94,135 +155,145 @@ async function loadPost() {
     sections.value = sectionResponse
     syncForm(postResponse)
   } catch (error) {
-    if (isAdminAuthorizationError(error)) {
-      await signOut().catch(() => undefined)
-      await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
-      return
-    }
-
-    hasError.value = true
-    post.value = null
+    await handleError(error, () => {
+      hasError.value = true
+      post.value = null
+    })
   } finally {
     isLoading.value = false
   }
 }
 
-async function saveDraft() {
+async function savePost() {
   if (!post.value || !canSave.value) {
     return
   }
 
   isSaving.value = true
   saveError.value = false
-  saveSuccess.value = false
+  successMessage.value = ''
 
   try {
-    const updatedPost = await updateAdminPostDraft(post.value.id, {
+    const updatedPost = await updateAdminPost(post.value.id, {
       title: form.title,
       content: form.content,
       sectionSlug: form.sectionSlug,
     })
     post.value = updatedPost
     syncForm(updatedPost)
-    saveSuccess.value = true
+    successMessage.value = isDraft.value ? 'Borrador guardado.' : 'Publicación actualizada.'
   } catch (error) {
-    if (isAdminAuthorizationError(error)) {
-      await signOut().catch(() => undefined)
-      await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
-      return
-    }
-
-    saveError.value = true
+    await handleError(error, () => {
+      saveError.value = true
+    })
   } finally {
     isSaving.value = false
   }
 }
 
-async function openDiscardModal() {
-  discardError.value = false
-  isDiscardModalOpen.value = true
+async function openConfirmation(action: ConfirmationAction) {
+  actionError.value = false
+  pendingAction.value = action
   lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
   await nextTick()
   cancelButton.value?.focus()
 }
 
-function closeDiscardModal() {
-  if (isSubmittingDiscard.value) {
+function closeConfirmation() {
+  if (isSubmittingAction.value) {
     return
   }
 
-  isDiscardModalOpen.value = false
+  pendingAction.value = null
   lastFocusedElement?.focus()
 }
 
-async function openPublishModal() {
-  publishError.value = false
-  isPublishModalOpen.value = true
-  lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  await nextTick()
-  publishCancelButton.value?.focus()
-}
-
-function closePublishModal() {
-  if (isPublishing.value) {
+async function confirmAction() {
+  if (!post.value || !pendingAction.value || isSubmittingAction.value) {
     return
   }
 
-  isPublishModalOpen.value = false
-  lastFocusedElement?.focus()
-}
-
-async function confirmPublish() {
-  if (!post.value || !canPublish.value) {
+  if (!canRunAction(pendingAction.value)) {
     return
   }
 
-  isPublishing.value = true
-  publishError.value = false
+  isSubmittingAction.value = true
+  actionError.value = false
+  successMessage.value = ''
 
   try {
-    const publishedPost = await publishAdminPost(post.value.id)
-    post.value = publishedPost
-    syncForm(publishedPost)
-    isPublishModalOpen.value = false
-  } catch (error) {
-    if (isAdminAuthorizationError(error)) {
-      await signOut().catch(() => undefined)
-      await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
+    if (pendingAction.value === 'discard') {
+      if (!sourceQuestion.value) {
+        return
+      }
+
+      await discardQuestionDraft(sourceQuestion.value.id)
+      await router.push({
+        name: 'admin-question-detail',
+        params: { id: sourceQuestion.value.id },
+      })
       return
     }
 
-    publishError.value = true
-  } finally {
-    isPublishing.value = false
-  }
-}
-
-async function confirmDiscard() {
-  if (!sourceQuestion.value || isSubmittingDiscard.value) {
-    return
-  }
-
-  isSubmittingDiscard.value = true
-  discardError.value = false
-
-  try {
-    await discardQuestionDraft(sourceQuestion.value.id)
-    await router.push({
-      name: 'admin-question-detail',
-      params: { id: sourceQuestion.value.id },
+    const updatedPost = await runPostAction(pendingAction.value, post.value.id)
+    post.value = updatedPost
+    syncForm(updatedPost)
+    successMessage.value = successMessageFor(pendingAction.value)
+    pendingAction.value = null
+  } catch (error) {
+    await handleError(error, () => {
+      actionError.value = true
     })
-  } catch (error) {
-    if (isAdminAuthorizationError(error)) {
-      await signOut().catch(() => undefined)
-      await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
-      return
-    }
-
-    discardError.value = true
   } finally {
-    isSubmittingDiscard.value = false
+    isSubmittingAction.value = false
   }
+}
+
+function canRunAction(action: ConfirmationAction): boolean {
+  switch (action) {
+    case 'discard':
+      return isDraft.value && !!sourceQuestion.value && !isBusy.value
+    case 'publish':
+      return canPublish.value
+    case 'archive':
+      return canArchive.value
+    case 'restore':
+      return canRestore.value
+  }
+}
+
+function runPostAction(action: Exclude<ConfirmationAction, 'discard'>, id: number) {
+  switch (action) {
+    case 'publish':
+      return publishAdminPost(id)
+    case 'archive':
+      return archiveAdminPost(id)
+    case 'restore':
+      return restoreAdminPost(id)
+  }
+}
+
+function successMessageFor(action: ConfirmationAction): string {
+  switch (action) {
+    case 'publish':
+      return 'Publicación publicada.'
+    case 'archive':
+      return 'Publicación archivada.'
+    case 'restore':
+      return 'Publicación restaurada.'
+    case 'discard':
+      return ''
+  }
+}
+
+async function handleError(error: unknown, fallback: () => void) {
+  if (isAdminAuthorizationError(error)) {
+    await signOut().catch(() => undefined)
+    await router.push({ name: 'admin-login', query: { reason: 'forbidden' } })
+    return
+  }
+
+  fallback()
 }
 
 function syncForm(currentPost: AdminPost) {
@@ -243,10 +314,10 @@ function sectionsByType(type: SectionType) {
   <main class="px-5 py-10 sm:px-6">
     <section class="mx-auto max-w-5xl">
       <RouterLink
-        :to="questionRoute"
+        :to="{ name: 'admin-posts' }"
         class="rounded-md text-sm font-black text-sky-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-700"
       >
-        Volver a la pregunta
+        Volver a publicaciones
       </RouterLink>
 
       <div
@@ -282,7 +353,7 @@ function sectionsByType(type: SectionType) {
           <div class="mt-5 flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div>
               <p class="text-sm font-black uppercase text-emerald-700">
-                {{ isPublished ? 'Publicación publicada' : 'Editor de publicación' }}
+                Editor de publicación
               </p>
               <h1 class="mt-2 text-3xl font-black sm:text-4xl">{{ displayTitle }}</h1>
             </div>
@@ -300,12 +371,37 @@ function sectionsByType(type: SectionType) {
                 type="button"
                 class="rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                 :disabled="isBusy"
-                @click="openDiscardModal"
+                @click="openConfirmation('discard')"
               >
                 Descartar borrador
               </button>
+              <button
+                v-if="isPublished"
+                type="button"
+                class="rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                :disabled="!canArchive"
+                @click="openConfirmation('archive')"
+              >
+                Archivar publicación
+              </button>
+              <button
+                v-if="isArchived"
+                type="button"
+                class="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                :disabled="!canRestore"
+                @click="openConfirmation('restore')"
+              >
+                Restaurar publicación
+              </button>
             </div>
           </div>
+
+          <p
+            v-if="isPublished"
+            class="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
+          >
+            Los cambios guardados se reflejarán inmediatamente en la publicación pública.
+          </p>
 
           <p
             v-if="isDirty"
@@ -315,37 +411,37 @@ function sectionsByType(type: SectionType) {
             Cambios sin guardar
           </p>
           <p
-            v-else-if="isDraft && saveSuccess"
+            v-else-if="successMessage"
             class="mt-5 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900"
             role="status"
           >
-            Borrador guardado.
+            {{ successMessage }}
+          </p>
+          <p
+            v-if="statusHelpMessage"
+            id="post-action-help"
+            class="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
+          >
+            {{ statusHelpMessage }}
           </p>
           <p
             v-if="saveError"
             class="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900"
             role="alert"
           >
-            No pudimos guardar el borrador. Intenta nuevamente en unos momentos.
+            No pudimos guardar los cambios. Revisa que tenga título y contenido cuando corresponda.
           </p>
           <p
-            v-if="discardError"
+            v-if="actionError"
             class="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900"
             role="alert"
           >
-            No pudimos descartar el borrador. Intenta nuevamente en unos momentos.
-          </p>
-          <p
-            v-if="publishError"
-            class="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900"
-            role="alert"
-          >
-            No pudimos publicar el borrador. Revisa que tenga título y contenido guardados.
+            No pudimos completar la acción. Intenta nuevamente en unos momentos.
           </p>
         </header>
 
         <div class="grid gap-8 p-6 sm:p-8">
-          <form v-if="isDraft" class="grid gap-6" @submit.prevent="saveDraft">
+          <form class="grid gap-6" @submit.prevent="savePost">
             <div>
               <label for="post-title" class="text-sm font-black uppercase text-emerald-700">
                 Título
@@ -401,42 +497,26 @@ function sectionsByType(type: SectionType) {
               />
             </div>
 
-            <p
-              v-if="isDirty"
-              id="publish-help"
-              class="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
-            >
-              Guarda los cambios antes de publicar.
-            </p>
-
             <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="submit"
                 class="rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950 disabled:cursor-not-allowed disabled:bg-slate-400"
                 :disabled="!canSave"
               >
-                {{ isSaving ? 'Guardando...' : 'Guardar borrador' }}
+                {{ isSaving ? savingLabel : saveButtonLabel }}
               </button>
               <button
+                v-if="isDraft"
                 type="button"
                 class="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                :aria-describedby="isDirty ? 'publish-help' : undefined"
+                :aria-describedby="statusHelpMessage ? 'post-action-help' : undefined"
                 :disabled="!canPublish"
-                @click="openPublishModal"
+                @click="openConfirmation('publish')"
               >
                 Publicar
               </button>
             </div>
           </form>
-
-          <section v-else aria-labelledby="published-content-title">
-            <h2 id="published-content-title" class="text-sm font-black uppercase text-emerald-700">
-              Contenido publicado
-            </h2>
-            <p class="mt-4 whitespace-pre-wrap text-lg leading-8 text-slate-800">
-              {{ displayContent }}
-            </p>
-          </section>
 
           <section v-if="sourceQuestion" aria-labelledby="source-question-title">
             <h2 id="source-question-title" class="text-sm font-black uppercase text-emerald-700">
@@ -468,21 +548,20 @@ function sectionsByType(type: SectionType) {
     </section>
 
     <div
-      v-if="isDiscardModalOpen"
+      v-if="pendingAction && confirmationConfig"
       class="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-5 py-8"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="discard-draft-title"
-      aria-describedby="discard-draft-description"
-      @keydown.esc.prevent="closeDiscardModal"
+      aria-labelledby="post-action-title"
+      aria-describedby="post-action-description"
+      @keydown.esc.prevent="closeConfirmation"
     >
       <section class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-        <h2 id="discard-draft-title" class="text-2xl font-black text-slate-950">
-          ¿Descartar este borrador?
+        <h2 id="post-action-title" class="text-2xl font-black text-slate-950">
+          {{ confirmationConfig.title }}
         </h2>
-        <p id="discard-draft-description" class="mt-3 leading-7 text-slate-700">
-          El borrador se eliminará. La pregunta original y su imagen permanecerán intactas y
-          seguirán pendientes.
+        <p id="post-action-description" class="mt-3 leading-7 text-slate-700">
+          {{ confirmationConfig.description }}
         </p>
 
         <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -490,57 +569,19 @@ function sectionsByType(type: SectionType) {
             ref="cancelButton"
             type="button"
             class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
-            :disabled="isSubmittingDiscard"
-            @click="closeDiscardModal"
+            :disabled="isSubmittingAction"
+            @click="closeConfirmation"
           >
             Cancelar
           </button>
           <button
             type="button"
-            class="rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            :disabled="isSubmittingDiscard"
-            @click="confirmDiscard"
+            class="rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:bg-slate-400"
+            :class="confirmationConfig.confirmClass"
+            :disabled="isSubmittingAction"
+            @click="confirmAction"
           >
-            {{ isSubmittingDiscard ? 'Procesando...' : 'Descartar borrador' }}
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <div
-      v-if="isPublishModalOpen"
-      class="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-5 py-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="publish-post-title"
-      aria-describedby="publish-post-description"
-      @keydown.esc.prevent="closePublishModal"
-    >
-      <section class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-        <h2 id="publish-post-title" class="text-2xl font-black text-slate-950">
-          ¿Publicar esta publicación?
-        </h2>
-        <p id="publish-post-description" class="mt-3 leading-7 text-slate-700">
-          Será visible para los estudiantes y la pregunta de origen quedará marcada como publicada.
-        </p>
-
-        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            ref="publishCancelButton"
-            type="button"
-            class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
-            :disabled="isPublishing"
-            @click="closePublishModal"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            class="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            :disabled="isPublishing"
-            @click="confirmPublish"
-          >
-            {{ isPublishing ? 'Publicando...' : 'Publicar' }}
+            {{ isSubmittingAction ? 'Procesando...' : confirmationConfig.confirmLabel }}
           </button>
         </div>
       </section>

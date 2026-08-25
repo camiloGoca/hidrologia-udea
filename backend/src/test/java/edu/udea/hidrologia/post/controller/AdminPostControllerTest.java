@@ -1,5 +1,6 @@
 package edu.udea.hidrologia.post.controller;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +20,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
+import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
+import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
-import edu.udea.hidrologia.post.dto.UpdatePostDraftRequest;
+import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostService;
@@ -50,6 +54,59 @@ class AdminPostControllerTest {
     }
 
     @Test
+    void returnsAdminPostsByStatus() throws Exception {
+        when(adminPostService.findPostsByStatus(PostStatus.PUBLISHED, 2, 10))
+                .thenReturn(new AdminPostsResponse(
+                        List.of(new AdminPostSummaryResponse(
+                                9L,
+                                "Título publicado",
+                                PostStatus.PUBLISHED,
+                                section(),
+                                true,
+                                1L,
+                                NOW,
+                                NOW,
+                                NOW)),
+                        2,
+                        10,
+                        21,
+                        3));
+
+        mockMvc.perform(get("/api/v1/admin/posts?status=PUBLISHED&page=2&size=10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id", is(9)))
+                .andExpect(jsonPath("$.items[0].title", is("Título publicado")))
+                .andExpect(jsonPath("$.items[0].status", is("PUBLISHED")))
+                .andExpect(jsonPath("$.items[0].section.slug", is("taller-1")))
+                .andExpect(jsonPath("$.items[0].hasSourceQuestion", is(true)))
+                .andExpect(jsonPath("$.items[0].sourceQuestionId", is(1)))
+                .andExpect(jsonPath("$.items[0].createdAt", is("2026-01-01T00:00:00Z")))
+                .andExpect(jsonPath("$.items[0].updatedAt", is("2026-01-01T00:00:00Z")))
+                .andExpect(jsonPath("$.items[0].publishedAt", is("2026-01-01T00:00:00Z")))
+                .andExpect(jsonPath("$.items[0].content").doesNotExist())
+                .andExpect(jsonPath("$.page", is(2)))
+                .andExpect(jsonPath("$.size", is(10)))
+                .andExpect(jsonPath("$.totalElements", is(21)))
+                .andExpect(jsonPath("$.totalPages", is(3)));
+    }
+
+    @Test
+    void defaultsAdminPostListToDrafts() throws Exception {
+        when(adminPostService.findPostsByStatus(PostStatus.DRAFT, 0, 20))
+                .thenReturn(new AdminPostsResponse(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/v1/admin/posts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(0)));
+    }
+
+    @Test
+    void returnsBadRequestForInvalidAdminPostStatus() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/posts?status=UNKNOWN"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void returnsAdminPostDetail() throws Exception {
         when(adminPostService.findAdminPostById(9L))
                 .thenReturn(draftResponse());
@@ -66,19 +123,19 @@ class AdminPostControllerTest {
     }
 
     @Test
-    void updatesDraftPost() throws Exception {
-        when(adminPostService.updateDraft(Mockito.eq(9L), Mockito.any(UpdatePostDraftRequest.class)))
+    void updatesPost() throws Exception {
+        when(adminPostService.updatePost(Mockito.eq(9L), Mockito.any(UpdatePostRequest.class)))
                 .thenReturn(new AdminPostResponse(
                         9L,
                         "Título guardado",
                         "Línea 1\nLínea 2",
-                        PostStatus.DRAFT,
+                        PostStatus.PUBLISHED,
                         1L,
                         section(),
                         sourceQuestion(),
                         NOW,
                         NOW,
-                        null));
+                        NOW));
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .contentType("application/json")
@@ -92,11 +149,11 @@ class AdminPostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title", is("Título guardado")))
                 .andExpect(jsonPath("$.content", is("Línea 1\nLínea 2")))
-                .andExpect(jsonPath("$.status", is("DRAFT")));
+                .andExpect(jsonPath("$.status", is("PUBLISHED")));
     }
 
     @Test
-    void returnsBadRequestForInvalidDraftUpdateRequest() throws Exception {
+    void returnsBadRequestForInvalidUpdateRequest() throws Exception {
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .contentType("application/json")
                 .content("""
@@ -110,7 +167,7 @@ class AdminPostControllerTest {
     }
 
     @Test
-    void returnsBadRequestWhenDraftUpdateIncludesStatus() throws Exception {
+    void returnsBadRequestWhenUpdateIncludesStatus() throws Exception {
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .contentType("application/json")
                 .content("""
@@ -125,8 +182,27 @@ class AdminPostControllerTest {
     }
 
     @Test
-    void returnsConflictWhenDraftUpdateStateIsInvalid() throws Exception {
-        when(adminPostService.updateDraft(Mockito.eq(9L), Mockito.any(UpdatePostDraftRequest.class)))
+    void returnsBadRequestWhenUpdateIncludesUnsupportedFields() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "title": "Título",
+                          "content": "Contenido",
+                          "sectionSlug": "taller-1",
+                          "publishedAt": "2026-01-01T00:00:00Z",
+                          "sourceQuestionId": 1,
+                          "tags": [],
+                          "attachments": [],
+                          "public_id": "private-id"
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsConflictWhenUpdateStateIsInvalid() throws Exception {
+        when(adminPostService.updatePost(Mockito.eq(9L), Mockito.any(UpdatePostRequest.class)))
                 .thenThrow(new PostStateConflictException("Only draft posts can be edited"));
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
@@ -145,17 +221,7 @@ class AdminPostControllerTest {
     @Test
     void publishesDraftPost() throws Exception {
         when(adminPostPublicationService.publishDraft(9L))
-                .thenReturn(new AdminPostResponse(
-                        9L,
-                        "Título publicado",
-                        "Contenido",
-                        PostStatus.PUBLISHED,
-                        1L,
-                        section(),
-                        sourceQuestion(),
-                        NOW,
-                        NOW,
-                        NOW));
+                .thenReturn(publishedResponse());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish"))
                 .andExpect(status().isOk())
@@ -164,14 +230,36 @@ class AdminPostControllerTest {
     }
 
     @Test
-    void returnsBadRequestWhenDraftIsNotPublishable() throws Exception {
+    void archivesPublishedPost() throws Exception {
+        when(adminPostPublicationService.archivePost(9L))
+                .thenReturn(archivedResponse());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/archive"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ARCHIVED")))
+                .andExpect(jsonPath("$.publishedAt", is("2026-01-01T00:00:00Z")));
+    }
+
+    @Test
+    void restoresArchivedPost() throws Exception {
+        when(adminPostPublicationService.restorePost(9L))
+                .thenReturn(publishedResponse());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/restore"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("PUBLISHED")))
+                .andExpect(jsonPath("$.publishedAt", is("2026-01-01T00:00:00Z")));
+    }
+
+    @Test
+    void returnsBadRequestWhenPostIsNotPublishable() throws Exception {
         when(adminPostPublicationService.publishDraft(9L))
                 .thenThrow(new InvalidPostPublicationException(
-                        "El borrador necesita título y contenido antes de publicarse."));
+                        "La publicación necesita título y contenido antes de publicarse."));
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", is("El borrador necesita título y contenido antes de publicarse.")));
+                .andExpect(jsonPath("$.message", is("La publicación necesita título y contenido antes de publicarse.")));
     }
 
     @Test
@@ -195,6 +283,34 @@ class AdminPostControllerTest {
                 NOW,
                 NOW,
                 null);
+    }
+
+    private AdminPostResponse publishedResponse() {
+        return new AdminPostResponse(
+                9L,
+                "Título publicado",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                1L,
+                section(),
+                sourceQuestion(),
+                NOW,
+                NOW,
+                NOW);
+    }
+
+    private AdminPostResponse archivedResponse() {
+        return new AdminPostResponse(
+                9L,
+                "Título publicado",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                1L,
+                section(),
+                sourceQuestion(),
+                NOW,
+                NOW,
+                NOW);
     }
 
     private PostSectionResponse section() {

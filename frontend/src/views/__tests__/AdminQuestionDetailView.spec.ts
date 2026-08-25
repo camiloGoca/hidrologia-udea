@@ -246,6 +246,30 @@ describe('AdminQuestionDetailView', () => {
     )
   })
 
+  it('shows archived linked post without public post link', async () => {
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'PUBLISHED',
+        linkedPost: { id: 9, status: 'ARCHIVED', title: 'Factor de forma de una cuenca' },
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('PUBLICADA')
+    expect(wrapper.text()).toContain('Publicación asociada')
+    expect(wrapper.text()).toContain('Estado: ARCHIVADA')
+    expect(wrapper.text()).toContain('Ver en administración')
+    expect(wrapper.text()).not.toContain('Ver publicación')
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    expect(links.some((link) => linkToObject(link.props('to')).name === 'post-detail')).toBe(false)
+    expect(links.some((link) => linkToObject(link.props('to')).name === 'admin-post-detail')).toBe(
+      true,
+    )
+  })
+
   it('opens and cancels reject confirmation without calling API', async () => {
     mockedGetQuestionById.mockResolvedValue(detail({ status: 'PENDING' }))
 

@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
-  discardQuestionDraft,
+  archiveAdminPost,
   getAdminPost,
   publishAdminPost,
-  updateAdminPostDraft,
-} from '@/services/api/adminService'
+  restoreAdminPost,
+  updateAdminPost,
+} from '@/services/api/adminPostService'
+import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminPost } from '@/types/adminPost'
@@ -27,10 +29,15 @@ vi.mock('vue-router', async (importOriginal) => {
   }
 })
 
-vi.mock('@/services/api/adminService', () => ({
+vi.mock('@/services/api/adminPostService', () => ({
   getAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
-  updateAdminPostDraft: vi.fn<(id: number, payload: unknown) => Promise<AdminPost>>(),
+  updateAdminPost: vi.fn<(id: number, payload: unknown) => Promise<AdminPost>>(),
   publishAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
+  archiveAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
+  restoreAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
+}))
+
+vi.mock('@/services/api/adminService', () => ({
   discardQuestionDraft: vi.fn<(questionId: number) => Promise<void>>(),
 }))
 
@@ -47,8 +54,10 @@ vi.mock('@/services/firebase/authService', () => ({
 }))
 
 const mockedGetAdminPost = vi.mocked(getAdminPost)
-const mockedUpdateAdminPostDraft = vi.mocked(updateAdminPostDraft)
+const mockedUpdateAdminPost = vi.mocked(updateAdminPost)
 const mockedPublishAdminPost = vi.mocked(publishAdminPost)
+const mockedArchiveAdminPost = vi.mocked(archiveAdminPost)
+const mockedRestoreAdminPost = vi.mocked(restoreAdminPost)
 const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedGetSections = vi.mocked(getSections)
 const mockedIsAdminAuthorizationError = vi.mocked(isAdminAuthorizationError)
@@ -59,8 +68,10 @@ describe('AdminPostEditorView', () => {
     routeParams.id = '9'
     routerPush.mockReset()
     mockedGetAdminPost.mockReset()
-    mockedUpdateAdminPostDraft.mockReset()
+    mockedUpdateAdminPost.mockReset()
     mockedPublishAdminPost.mockReset()
+    mockedArchiveAdminPost.mockReset()
+    mockedRestoreAdminPost.mockReset()
     mockedDiscardQuestionDraft.mockReset()
     mockedGetSections.mockReset()
     mockedGetSections.mockResolvedValue(sections())
@@ -70,7 +81,7 @@ describe('AdminPostEditorView', () => {
     mockedSignOut.mockResolvedValue()
   })
 
-  it('renders loading state while the draft is being fetched', () => {
+  it('renders loading state while the post is being fetched', () => {
     mockedGetAdminPost.mockReturnValue(new Promise(() => undefined))
 
     const wrapper = mountView()
@@ -101,7 +112,7 @@ describe('AdminPostEditorView', () => {
 
   it('tracks dirty state and saves a draft manually', async () => {
     mockedGetAdminPost.mockResolvedValue(adminPost())
-    mockedUpdateAdminPostDraft.mockResolvedValue(
+    mockedUpdateAdminPost.mockResolvedValue(
       adminPost({
         title: 'Título guardado',
         content: 'Línea 1\nLínea 2',
@@ -123,7 +134,7 @@ describe('AdminPostEditorView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(mockedUpdateAdminPostDraft).toHaveBeenCalledWith(9, {
+    expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título guardado',
       content: 'Línea 1\nLínea 2',
       sectionSlug: 'parcial-1',
@@ -132,50 +143,28 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).not.toContain('Cambios sin guardar')
   })
 
-  it('renders save error without technical details', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost())
-    mockedUpdateAdminPostDraft.mockRejectedValue(new Error('SQL detail'))
-
-    const wrapper = mountView()
-    await flushPromises()
-
-    await wrapper.find('input').setValue('Título')
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('No pudimos guardar el borrador.')
-    expect(wrapper.text()).not.toContain('SQL detail')
-  })
-
-  it('keeps publish disabled when saved title is blank', async () => {
+  it('keeps draft publish disabled until valid content is saved', async () => {
     mockedGetAdminPost.mockResolvedValue(adminPost({ title: '', content: '' }))
 
     const wrapper = mountView()
     await flushPromises()
 
     expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
-  })
-
-  it('keeps publish disabled when saved content is blank', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título guardado', content: '' }))
-
-    const wrapper = mountView()
-    await flushPromises()
-
-    expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
-  })
-
-  it('keeps publish disabled while valid changes are dirty', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost({ title: '', content: '' }))
-
-    const wrapper = mountView()
-    await flushPromises()
 
     await wrapper.find('input').setValue('Título')
     await wrapper.find('textarea').setValue('Contenido')
 
     expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Guarda los cambios antes de publicar.')
+  })
+
+  it('keeps publish disabled when saved title or content is blank', async () => {
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título guardado', content: '' }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
   })
 
   it('enables publish when valid title and content are already saved', async () => {
@@ -220,32 +209,21 @@ describe('AdminPostEditorView', () => {
     expect(mockedPublishAdminPost).toHaveBeenCalledWith(9)
     expect(wrapper.text()).toContain('PUBLICADA')
     expect(wrapper.text()).toContain('Ver publicación pública')
-    expect(wrapper.find('input').exists()).toBe(false)
-    expect(wrapper.find('textarea').exists()).toBe(false)
   })
 
-  it('keeps draft editable when publish fails', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título', content: 'Contenido' }))
-    mockedPublishAdminPost.mockRejectedValue(new Error('Bad request'))
-
-    const wrapper = mountView()
-    await flushPromises()
-
-    await buttonByText(wrapper, 'Publicar').trigger('click')
-    await lastButtonByText(wrapper, 'Publicar').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('No pudimos publicar el borrador.')
-    expect(wrapper.text()).toContain('BORRADOR')
-    expect(wrapper.find('textarea').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Pregunta de origen')
-  })
-
-  it('renders published post as read-only with public and question links', async () => {
+  it('edits a published post and keeps public actions blocked while dirty', async () => {
     mockedGetAdminPost.mockResolvedValue(
       adminPost({
         title: 'Título publicado',
-        content: 'Contenido\nmultilínea',
+        content: 'Contenido',
+        status: 'PUBLISHED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+    mockedUpdateAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título actualizado',
+        content: 'Contenido',
         status: 'PUBLISHED',
         publishedAt: '2026-01-02T00:00:00Z',
       }),
@@ -254,29 +232,165 @@ describe('AdminPostEditorView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Publicación publicada')
-    expect(wrapper.text()).toContain('PUBLICADA')
-    expect(wrapper.text()).toContain('Contenido\nmultilínea')
+    expect(wrapper.text()).toContain('Los cambios guardados se reflejarán inmediatamente')
+    expect(wrapper.find('input').exists()).toBe(true)
+    expect(wrapper.find('textarea').exists()).toBe(true)
     expect(wrapper.text()).toContain('Ver publicación pública')
-    expect(wrapper.text()).toContain('Ver pregunta original')
-    expect(wrapper.find('input').exists()).toBe(false)
-    expect(wrapper.find('textarea').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Descartar borrador')
+
+    await wrapper.find('input').setValue('Título actualizado')
+    expect(buttonByText(wrapper, 'Archivar publicación').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Guarda los cambios antes de archivar.')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
+      title: 'Título actualizado',
+      content: 'Contenido',
+      sectionSlug: 'taller-1',
+    })
+    expect(wrapper.text()).toContain('Publicación actualizada.')
+    expect(wrapper.text()).toContain('PUBLICADA')
   })
 
-  it('opens and cancels discard confirmation without calling API', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost())
+  it('keeps save disabled for published posts with blank content', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título publicado',
+        content: 'Contenido',
+        status: 'PUBLISHED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
 
     const wrapper = mountView()
     await flushPromises()
 
-    await buttonByText(wrapper, 'Descartar borrador').trigger('click')
-    expect(wrapper.text()).toContain('¿Descartar este borrador?')
+    await wrapper.find('textarea').setValue('   ')
 
+    expect(buttonByText(wrapper, 'Guardar cambios').attributes('disabled')).toBeDefined()
+  })
+
+  it('archives a published post through an accessible modal', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({ title: 'Título', content: 'Contenido', status: 'PUBLISHED', publishedAt: '2026-01-02T00:00:00Z' }),
+    )
+    mockedArchiveAdminPost.mockResolvedValue(
+      adminPost({ title: 'Título', content: 'Contenido', status: 'ARCHIVED', publishedAt: '2026-01-02T00:00:00Z' }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Archivar publicación').trigger('click')
+    expect(wrapper.text()).toContain('¿Archivar esta publicación?')
     await buttonByText(wrapper, 'Cancelar').trigger('click')
+    expect(mockedArchiveAdminPost).not.toHaveBeenCalled()
 
-    expect(mockedDiscardQuestionDraft).not.toHaveBeenCalled()
-    expect(wrapper.text()).not.toContain('¿Descartar este borrador?')
+    await buttonByText(wrapper, 'Archivar publicación').trigger('click')
+    await lastButtonByText(wrapper, 'Archivar publicación').trigger('click')
+    await flushPromises()
+
+    expect(mockedArchiveAdminPost).toHaveBeenCalledWith(9)
+    expect(wrapper.text()).toContain('ARCHIVADA')
+    expect(wrapper.text()).toContain('Publicación archivada.')
+    expect(wrapper.text()).not.toContain('Ver publicación pública')
+  })
+
+  it('edits and restores an archived post after saving changes', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({ title: 'Título', content: 'Contenido', status: 'ARCHIVED', publishedAt: '2026-01-02T00:00:00Z' }),
+    )
+    mockedUpdateAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título archivado',
+        content: 'Contenido',
+        status: 'ARCHIVED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+    mockedRestoreAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título archivado',
+        content: 'Contenido',
+        status: 'PUBLISHED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ARCHIVADA')
+    expect(wrapper.text()).not.toContain('Ver publicación pública')
+    expect(wrapper.text()).not.toContain('Publicar')
+
+    await wrapper.find('input').setValue('Título archivado')
+    expect(buttonByText(wrapper, 'Restaurar publicación').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Guarda los cambios antes de restaurar.')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Publicación actualizada.')
+    await buttonByText(wrapper, 'Restaurar publicación').trigger('click')
+    expect(wrapper.text()).toContain('¿Restaurar esta publicación?')
+    await lastButtonByText(wrapper, 'Restaurar publicación').trigger('click')
+    await flushPromises()
+
+    expect(mockedRestoreAdminPost).toHaveBeenCalledWith(9)
+    expect(wrapper.text()).toContain('PUBLICADA')
+    expect(wrapper.text()).toContain('Publicación restaurada.')
+  })
+
+  it('works without a source question reference', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Publicación directa',
+        content: 'Contenido',
+        status: 'PUBLISHED',
+        sourceQuestionId: null,
+        sourceQuestion: null,
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Pregunta de origen')
+    expect(wrapper.text()).not.toContain('Ver pregunta original')
+  })
+
+  it('renders a friendly save error without technical details', async () => {
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título', content: 'Contenido' }))
+    mockedUpdateAdminPost.mockRejectedValue(new Error('SQL detail'))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('Título cambiado')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No pudimos guardar los cambios.')
+    expect(wrapper.text()).not.toContain('SQL detail')
+  })
+
+  it('renders a friendly action error without technical details', async () => {
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título', content: 'Contenido' }))
+    mockedPublishAdminPost.mockRejectedValue(new Error('Cloud detail'))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Publicar').trigger('click')
+    await lastButtonByText(wrapper, 'Publicar').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No pudimos completar la acción.')
+    expect(wrapper.text()).not.toContain('Cloud detail')
   })
 
   it('discards draft and returns to the source question', async () => {
@@ -297,22 +411,7 @@ describe('AdminPostEditorView', () => {
     })
   })
 
-  it('renders friendly discard error without technical details', async () => {
-    mockedGetAdminPost.mockResolvedValue(adminPost())
-    mockedDiscardQuestionDraft.mockRejectedValue(new Error('SQL detail'))
-
-    const wrapper = mountView()
-    await flushPromises()
-
-    await buttonByText(wrapper, 'Descartar borrador').trigger('click')
-    await lastButtonByText(wrapper, 'Descartar borrador').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('No pudimos descartar el borrador.')
-    expect(wrapper.text()).not.toContain('SQL detail')
-  })
-
-  it('renders error state for missing drafts', async () => {
+  it('renders error state for missing posts', async () => {
     mockedGetAdminPost.mockRejectedValue(new Error('Not found'))
 
     const wrapper = mountView()

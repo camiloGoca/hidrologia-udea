@@ -55,11 +55,44 @@ public class AdminPostPublicationService {
         return adminPostService.toResponse(post);
     }
 
+    @Transactional
+    public AdminPostResponse archivePost(Long id) {
+        Post post = postRepository.findAdminById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
+
+        if (post.getStatus() != PostStatus.PUBLISHED) {
+            throw new PostStateConflictException("Only published posts can be archived");
+        }
+
+        post.archive(Instant.now(clock));
+
+        return adminPostService.toResponse(post);
+    }
+
+    @Transactional
+    public AdminPostResponse restorePost(Long id) {
+        Post post = postRepository.findAdminById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
+
+        if (post.getStatus() != PostStatus.ARCHIVED) {
+            throw new PostStateConflictException("Only archived posts can be restored");
+        }
+
+        validatePublishable(post);
+        post.restore(Instant.now(clock));
+
+        return adminPostService.toResponse(post);
+    }
+
     private void validatePublishable(Post post) {
         if (post.getTitle() == null || post.getTitle().isBlank() || post.getContent() == null
                 || post.getContent().isBlank()) {
             throw new InvalidPostPublicationException(
-                    "El borrador necesita título y contenido antes de publicarse.");
+                    "La publicación necesita título y contenido antes de publicarse.");
+        }
+
+        if (post.getSection() == null || !post.getSection().isActive()) {
+            throw new InvalidPostPublicationException("La publicación debe tener una sección activa.");
         }
     }
 }

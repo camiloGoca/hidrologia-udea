@@ -13,6 +13,7 @@ import {
 } from '@/services/api/adminService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminQuestionDetail } from '@/types/adminQuestion'
+import { adminPostStatusLabel } from '@/utils/adminPostStatus'
 import { adminQuestionStatusLabel } from '@/utils/adminQuestionStatus'
 
 type QuestionAction = 'createDraft' | 'discardDraft' | 'archive' | 'reject' | 'reopen'
@@ -325,10 +326,11 @@ function formatDate(value: string): string {
               {{ question.linkedPost.title || 'Sin título' }}
             </p>
             <p class="mt-1 text-sm font-bold text-slate-600">
-              Estado: {{ adminQuestionStatusLabel(question.status) }}
+              Estado: {{ adminPostStatusLabel(question.linkedPost.status) }}
             </p>
             <div class="mt-4 flex flex-wrap gap-3">
               <RouterLink
+                v-if="question.linkedPost.status === 'PUBLISHED'"
                 :to="{ name: 'post-detail', params: { id: question.linkedPost.id } }"
                 class="inline-flex rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
               >

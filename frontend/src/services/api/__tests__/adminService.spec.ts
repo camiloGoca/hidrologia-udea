@@ -7,14 +7,11 @@ import {
   createQuestionDraft,
   discardQuestionDraft,
   getAdminMe,
-  getAdminPost,
   getPendingQuestions,
   getQuestionById,
   getQuestionsByStatus,
-  publishAdminPost,
   rejectQuestion,
   reopenQuestion,
-  updateAdminPostDraft,
 } from '@/services/api/adminService'
 import type { AdminMeResponse } from '@/types/admin'
 import type { AdminPost } from '@/types/adminPost'
@@ -28,21 +25,18 @@ vi.mock('@/services/api/adminHttpClient', () => ({
   adminHttpClient: {
     get: vi.fn<(url: string, config?: unknown) => Promise<AxiosResponse<unknown>>>(),
     post: vi.fn<(url: string) => Promise<AxiosResponse<unknown>>>(),
-    patch: vi.fn<(url: string, payload: unknown) => Promise<AxiosResponse<unknown>>>(),
     delete: vi.fn<(url: string) => Promise<AxiosResponse<unknown>>>(),
   },
 }))
 
 const mockedGet = vi.mocked(adminHttpClient.get)
 const mockedPost = vi.mocked(adminHttpClient.post)
-const mockedPatch = vi.mocked(adminHttpClient.patch)
 const mockedDelete = vi.mocked(adminHttpClient.delete)
 
 describe('adminService', () => {
   beforeEach(() => {
     mockedGet.mockReset()
     mockedPost.mockReset()
-    mockedPatch.mockReset()
     mockedDelete.mockReset()
   })
 
@@ -143,46 +137,9 @@ describe('adminService', () => {
     expect(mockedDelete).toHaveBeenCalledWith('/admin/questions/1/draft')
   })
 
-  it('loads an admin post through the admin http client', async () => {
-    const draft = adminPost()
-    mockedGet.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
-
-    await expect(getAdminPost(9)).resolves.toEqual(draft)
-
-    expect(mockedGet).toHaveBeenCalledWith('/admin/posts/9')
-  })
-
-  it('updates an admin post draft through the admin http client', async () => {
-    const draft = adminPost({
-      title: 'Título',
-      content: 'Contenido',
-    })
-    const payload = {
-      title: 'Título',
-      content: 'Contenido',
-      sectionSlug: 'taller-1',
-    }
-    mockedPatch.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
-
-    await expect(updateAdminPostDraft(9, payload)).resolves.toEqual(draft)
-
-    expect(mockedPatch).toHaveBeenCalledWith('/admin/posts/9', payload)
-  })
-
-  it('publishes an admin post through the admin http client', async () => {
-    const published = adminPost({
-      status: 'PUBLISHED',
-      publishedAt: '2026-01-02T00:00:00Z',
-    })
-    mockedPost.mockResolvedValue({ data: published } as AxiosResponse<AdminPost>)
-
-    await expect(publishAdminPost(9)).resolves.toEqual(published)
-
-    expect(mockedPost).toHaveBeenCalledWith('/admin/posts/9/publish')
-  })
 })
 
-function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
+function adminPost(): AdminPost {
   return {
     id: 9,
     title: '',
@@ -199,7 +156,7 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     sourceQuestion: {
       id: 1,
       nickname: null,
-      question: 'Pregunta',
+      question: 'Pregunta de prueba',
       status: 'PENDING',
       createdAt: '2026-01-01T00:00:00Z',
       hasAttachment: false,
@@ -207,6 +164,5 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     publishedAt: null,
-    ...overrides,
   }
 }

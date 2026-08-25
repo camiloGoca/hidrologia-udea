@@ -327,16 +327,27 @@ Implementado en la fase Admin Questions V2B2A:
 * el Post publicado queda visible en la API pública;
 * los Posts publicados quedan en solo lectura durante esta fase.
 
+Implementado en la fase Admin Publications V1:
+
+* el panel administrativo incluye un módulo de publicaciones;
+* las publicaciones se organizan en pestañas de borradores, publicadas y archivadas;
+* los Posts `DRAFT`, `PUBLISHED` y `ARCHIVED` pueden editarse con guardado manual;
+* los cambios guardados sobre un Post `PUBLISHED` se reflejan inmediatamente en la web pública;
+* los Posts `ARCHIVED` se conservan administrativamente y no son visibles públicamente;
+* archivar y restaurar publicaciones son acciones explícitas;
+* `publishedAt` conserva la fecha de primera publicación al archivar y restaurar;
+* `StudentQuestion.PUBLISHED` no cambia cuando se archiva o restaura el Post asociado.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
 
-* edición de publicaciones ya publicadas;
-* módulo administrativo completo de publicaciones;
 * administración y asignación de hashtags desde el editor;
-* archivar publicaciones;
+* creación manual de publicaciones;
 * imágenes propias de Posts;
-* copia controlada de una QuestionAttachment hacia una imagen de Post.
+* copia controlada de una QuestionAttachment hacia una imagen de Post;
+* versionado o historial de cambios;
+* autosave.
 
 ---
 

@@ -435,7 +435,9 @@ Mientras el Post asociado esté en `DRAFT`, la StudentQuestion permanece en `PEN
 
 En Admin Questions V2B2A el borrador se edita con guardado manual. La sección del Post puede cambiar de forma independiente a la sección original de la StudentQuestion. La publicación exige título y contenido no vacíos y se realiza en una única transacción: `Post.DRAFT -> Post.PUBLISHED`, `published_at = now` y, si existe pregunta origen, `StudentQuestion.PENDING -> StudentQuestion.PUBLISHED`. La pregunta publicada sigue siendo un recurso privado/admin; el contenido público es el Post publicado.
 
-Quedan para fases futuras: edición de Posts ya publicados, administración/asignación de hashtags desde el editor, archivado de Posts, imágenes propias de Posts y copia explícita de QuestionAttachment hacia Post.
+En Admin Publications V1 el panel administrativo lista Posts por estado (`DRAFT`, `PUBLISHED`, `ARCHIVED`) con paginación y orden editorial por `updated_at DESC, id DESC`. Los tres estados permiten edición con guardado manual. Los Posts publicados requieren título y contenido válidos, y sus cambios guardados impactan inmediatamente la API pública. Los Posts archivados no aparecen en endpoints públicos, pero pueden editarse y restaurarse. Las transiciones `PUBLISHED -> ARCHIVED` y `ARCHIVED -> PUBLISHED` preservan `published_at` y no modifican la StudentQuestion de origen.
+
+Quedan para fases futuras: administración/asignación de hashtags desde el editor, creación manual de publicaciones, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---
 
