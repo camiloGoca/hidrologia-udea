@@ -57,3 +57,7 @@ export interface UpdateAdminPostRequest {
   sectionSlug: string
   tagIds?: number[] | null
 }
+
+export interface CreateAdminPostRequest {
+  sectionSlug: string
+}

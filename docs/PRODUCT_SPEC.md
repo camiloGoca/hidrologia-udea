@@ -351,13 +351,20 @@ Implementado en la fase Admin Hashtags V1:
 * guardar hashtags, contenido y sección ocurre en una única operación editorial;
 * los cambios guardados sobre un Post `PUBLISHED` se reflejan inmediatamente en la web pública.
 
+Implementado en la fase Admin Publications V2:
+
+* el profesor puede crear publicaciones `DRAFT` manualmente desde `Admin > Publicaciones`;
+* una publicación manual nace sin `StudentQuestion` de origen;
+* crear una publicación manual no la publica automáticamente;
+* el editor existente permite completar título, contenido, sección y hashtags;
+* descartar un borrador manual elimina únicamente ese Post y no afecta preguntas.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
 
 * búsqueda avanzada o autocompletado de hashtags;
 * redirects si alguna vez se permite cambiar slugs;
-* creación manual de publicaciones;
 * imágenes propias de Posts;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;
 * versionado o historial de cambios;

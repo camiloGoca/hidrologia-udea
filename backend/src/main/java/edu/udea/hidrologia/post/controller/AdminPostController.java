@@ -1,14 +1,18 @@
 package edu.udea.hidrologia.post.controller;
 
-import java.util.Map;
-import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
@@ -26,6 +31,7 @@ import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
 @RequestMapping("/api/v1/admin/posts")
 public class AdminPostController {
 
+    private static final Set<String> CREATE_POST_FIELDS = Set.of("sectionSlug");
     private static final Set<String> UPDATE_POST_FIELDS = Set.of("title", "content", "sectionSlug", "tagIds");
 
     private final AdminPostService adminPostService;
@@ -51,11 +57,25 @@ public class AdminPostController {
         return adminPostService.findAdminPostById(id);
     }
 
+    @PostMapping
+    public ResponseEntity<AdminPostResponse> createManualDraft(@RequestBody Map<String, Object> request) {
+        AdminPostResponse response = adminPostService.createManualDraft(toCreatePostRequest(request));
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(response);
+    }
+
     @PatchMapping("/{id}")
     public AdminPostResponse updatePost(
             @PathVariable Long id,
             @RequestBody Map<String, Object> request) {
         return adminPostService.updatePost(id, toUpdatePostRequest(request));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void discardManualDraft(@PathVariable Long id) {
+        adminPostService.discardManualDraft(id);
     }
 
     @PostMapping("/{id}/publish")
@@ -87,6 +107,18 @@ public class AdminPostController {
                 requiredString(request, "content"),
                 requiredString(request, "sectionSlug"),
                 optionalPositiveLongList(request, "tagIds"));
+    }
+
+    private CreatePostRequest toCreatePostRequest(Map<String, Object> request) {
+        if (request == null) {
+            throw new InvalidPostDraftRequestException("Post create request is invalid");
+        }
+
+        if (!CREATE_POST_FIELDS.containsAll(request.keySet())) {
+            throw new InvalidPostDraftRequestException("Post create request contains unsupported fields");
+        }
+
+        return new CreatePostRequest(requiredString(request, "sectionSlug"));
     }
 
     private String requiredString(Map<String, Object> request, String field) {

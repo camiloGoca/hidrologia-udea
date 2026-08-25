@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { adminHttpClient } from '@/services/api/adminHttpClient'
 import {
   archiveAdminPost,
+  createAdminPost,
+  discardManualAdminPost,
   getAdminPost,
   getPostsByStatus,
   publishAdminPost,
@@ -15,20 +17,23 @@ import type { AdminPost, AdminPostsResponse } from '@/types/adminPost'
 vi.mock('@/services/api/adminHttpClient', () => ({
   adminHttpClient: {
     get: vi.fn<(url: string, config?: unknown) => Promise<AxiosResponse<unknown>>>(),
-    post: vi.fn<(url: string) => Promise<AxiosResponse<unknown>>>(),
+    post: vi.fn<(url: string, payload?: unknown) => Promise<AxiosResponse<unknown>>>(),
     patch: vi.fn<(url: string, payload: unknown) => Promise<AxiosResponse<unknown>>>(),
+    delete: vi.fn<(url: string) => Promise<AxiosResponse<unknown>>>(),
   },
 }))
 
 const mockedGet = vi.mocked(adminHttpClient.get)
 const mockedPost = vi.mocked(adminHttpClient.post)
 const mockedPatch = vi.mocked(adminHttpClient.patch)
+const mockedDelete = vi.mocked(adminHttpClient.delete)
 
 describe('adminPostService', () => {
   beforeEach(() => {
     mockedGet.mockReset()
     mockedPost.mockReset()
     mockedPatch.mockReset()
+    mockedDelete.mockReset()
   })
 
   it('loads posts by status through the admin http client', async () => {
@@ -75,6 +80,20 @@ describe('adminPostService', () => {
     expect(mockedPatch).toHaveBeenCalledWith('/admin/posts/9', payload)
   })
 
+  it('creates a manual draft through the admin http client', async () => {
+    const draft = adminPost({
+      id: 10,
+      sourceQuestionId: null,
+      sourceQuestion: null,
+    })
+    const payload = { sectionSlug: 'taller-1' }
+    mockedPost.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
+
+    await expect(createAdminPost(payload)).resolves.toEqual(draft)
+
+    expect(mockedPost).toHaveBeenCalledWith('/admin/posts', payload)
+  })
+
   it('publishes archives and restores admin posts through explicit actions', async () => {
     const published = adminPost({
       status: 'PUBLISHED',
@@ -89,6 +108,14 @@ describe('adminPostService', () => {
     expect(mockedPost).toHaveBeenNthCalledWith(1, '/admin/posts/9/publish')
     expect(mockedPost).toHaveBeenNthCalledWith(2, '/admin/posts/9/archive')
     expect(mockedPost).toHaveBeenNthCalledWith(3, '/admin/posts/9/restore')
+  })
+
+  it('discards a manual draft through the admin http client', async () => {
+    mockedDelete.mockResolvedValue({ data: undefined } as AxiosResponse<void>)
+
+    await expect(discardManualAdminPost(10)).resolves.toBeUndefined()
+
+    expect(mockedDelete).toHaveBeenCalledWith('/admin/posts/10')
   })
 })
 

@@ -3,6 +3,7 @@ package edu.udea.hidrologia.post.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
@@ -178,6 +180,47 @@ class AdminPostServiceTest {
         assertThat(response.sourceQuestion().hasAttachment()).isTrue();
         assertThat(response.section().slug()).isEqualTo("taller-1");
         assertThat(response.publishedAt()).isNull();
+    }
+
+    @Test
+    void createsManualDraftWithoutSourceQuestionOrPublishedAt() {
+        Section section = section(1L, SectionType.TALLER, "Taller 1", "taller-1");
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(section));
+        when(postRepository.saveAndFlush(org.mockito.Mockito.any(Post.class))).thenAnswer(invocation -> {
+            Post post = invocation.getArgument(0);
+            ReflectionTestUtils.setField(post, "id", 10L);
+            return post;
+        });
+
+        AdminPostResponse response = adminPostService.createManualDraft(new CreatePostRequest("  taller-1  "));
+
+        assertThat(response.id()).isEqualTo(10L);
+        assertThat(response.status()).isEqualTo(PostStatus.DRAFT);
+        assertThat(response.title()).isEmpty();
+        assertThat(response.content()).isEmpty();
+        assertThat(response.sourceQuestionId()).isNull();
+        assertThat(response.sourceQuestion()).isNull();
+        assertThat(response.tags()).isEmpty();
+        assertThat(response.section().slug()).isEqualTo("taller-1");
+        assertThat(response.createdAt()).isEqualTo(UPDATED_AT);
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+        assertThat(response.publishedAt()).isNull();
+
+        ArgumentCaptor<Post> postCaptor = ArgumentCaptor.forClass(Post.class);
+        verify(postRepository).saveAndFlush(postCaptor.capture());
+        Post savedPost = postCaptor.getValue();
+        assertThat(savedPost.getSourceQuestion()).isNull();
+        assertThat(savedPost.getPublishedAt()).isNull();
+        assertThat(savedPost.getTags()).isEmpty();
+    }
+
+    @Test
+    void rejectsManualDraftCreationWhenSectionDoesNotExistOrIsInactive() {
+        when(sectionRepository.findBySlugAndActiveTrue("inactiva")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminPostService.createManualDraft(new CreatePostRequest("inactiva")))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Section not found");
     }
 
     @Test
@@ -542,13 +585,72 @@ class AdminPostServiceTest {
     }
 
     @Test
+    void discardsManualDraftWithoutTouchingQuestions() {
+        Post manualDraft = new Post(
+                10L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "",
+                "",
+                PostStatus.DRAFT,
+                NOW,
+                NOW,
+                null,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(10L)).thenReturn(Optional.of(manualDraft));
+
+        adminPostService.discardManualDraft(10L);
+
+        verify(postRepository).delete(manualDraft);
+    }
+
+    @Test
+    void rejectsDiscardingQuestionDraftThroughManualDraftEndpoint() {
+        StudentQuestion question = question();
+        Post questionDraft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(questionDraft));
+
+        assertThatThrownBy(() -> adminPostService.discardManualDraft(9L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Only manual draft posts can be discarded here");
+
+        verify(postRepository, never()).delete(questionDraft);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PENDING);
+    }
+
+    @Test
+    void rejectsDiscardingPublishedOrArchivedPostsManually() {
+        Post published = new Post(
+                11L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "Titulo",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(published));
+
+        assertThatThrownBy(() -> adminPostService.discardManualDraft(11L))
+                .isInstanceOf(PostStateConflictException.class);
+
+        verify(postRepository, never()).delete(published);
+    }
+
+    @Test
     void allowsDraftToExistWithBlankTitleAndContentButRejectsPublishedBlankContent() {
         StudentQuestion question = question();
 
         Post draft = Post.createQuestionDraft(question, NOW);
+        Post manualDraft = Post.createManualDraft(question.getSection(), NOW);
 
         assertThat(draft.getTitle()).isEmpty();
         assertThat(draft.getContent()).isEmpty();
+        assertThat(manualDraft.getTitle()).isEmpty();
+        assertThat(manualDraft.getContent()).isEmpty();
+        assertThat(manualDraft.getSourceQuestion()).isNull();
         assertThatThrownBy(() -> new Post(
                 9L,
                 question.getSection(),

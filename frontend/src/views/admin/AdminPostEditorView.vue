@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  discardManualAdminPost,
   getAdminPost,
   publishAdminPost,
   restoreAdminPost,
@@ -108,16 +109,18 @@ const confirmationConfig = computed(() => {
     case 'discard':
       return {
         title: '¿Descartar este borrador?',
-        description:
-          'El borrador se eliminará. La pregunta original y su imagen permanecerán intactas y seguirán pendientes.',
+        description: sourceQuestion.value
+          ? 'El borrador se eliminará. La pregunta original y su imagen permanecerán intactas y seguirán pendientes.'
+          : 'El borrador se eliminará. No hay una pregunta de origen asociada a esta publicación.',
         confirmLabel: 'Descartar borrador',
         confirmClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
       }
     case 'publish':
       return {
         title: '¿Publicar esta publicación?',
-        description:
-          'Será visible para los estudiantes y la pregunta de origen quedará marcada como publicada.',
+        description: sourceQuestion.value
+          ? 'Será visible para los estudiantes y la pregunta de origen quedará marcada como publicada.'
+          : 'Será visible para los estudiantes. Esta publicación no tiene pregunta de origen.',
         confirmLabel: 'Publicar',
         confirmClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
       }
@@ -235,14 +238,19 @@ async function confirmAction() {
 
   try {
     if (pendingAction.value === 'discard') {
-      if (!sourceQuestion.value) {
+      if (sourceQuestion.value) {
+        await discardQuestionDraft(sourceQuestion.value.id)
+        await router.push({
+          name: 'admin-question-detail',
+          params: { id: sourceQuestion.value.id },
+        })
         return
       }
 
-      await discardQuestionDraft(sourceQuestion.value.id)
+      await discardManualAdminPost(post.value.id)
       await router.push({
-        name: 'admin-question-detail',
-        params: { id: sourceQuestion.value.id },
+        name: 'admin-posts',
+        query: { estado: 'borradores' },
       })
       return
     }
@@ -264,7 +272,7 @@ async function confirmAction() {
 function canRunAction(action: ConfirmationAction): boolean {
   switch (action) {
     case 'discard':
-      return isDraft.value && !!sourceQuestion.value && !isBusy.value
+      return isDraft.value && !isBusy.value
     case 'publish':
       return canPublish.value
     case 'archive':
@@ -395,7 +403,7 @@ function sameIds(left: number[], right: number[]) {
                 Ver publicación pública
               </RouterLink>
               <button
-                v-if="isDraft && sourceQuestion"
+                v-if="isDraft"
                 type="button"
                 class="rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                 :disabled="isBusy"

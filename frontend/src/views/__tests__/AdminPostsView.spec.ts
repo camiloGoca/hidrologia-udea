@@ -2,9 +2,11 @@ import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
-import { getPostsByStatus } from '@/services/api/adminPostService'
+import { createAdminPost, getPostsByStatus } from '@/services/api/adminPostService'
+import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
-import type { AdminPostStatus, AdminPostSummary, AdminPostsResponse } from '@/types/adminPost'
+import type { AdminPost, AdminPostStatus, AdminPostSummary, AdminPostsResponse } from '@/types/adminPost'
+import type { Section } from '@/types/section'
 import AdminPostsView from '@/views/admin/AdminPostsView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn<(route: unknown) => void>())
@@ -25,6 +27,11 @@ vi.mock('@/services/api/adminPostService', () => ({
   getPostsByStatus: vi.fn<
     (status: AdminPostStatus, page?: number, size?: number) => Promise<AdminPostsResponse>
   >(),
+  createAdminPost: vi.fn<(payload: { sectionSlug: string }) => Promise<AdminPost>>(),
+}))
+
+vi.mock('@/services/api/sectionService', () => ({
+  getSections: vi.fn<() => Promise<Section[]>>(),
 }))
 
 vi.mock('@/services/api/adminErrors', () => ({
@@ -36,6 +43,8 @@ vi.mock('@/services/firebase/authService', () => ({
 }))
 
 const mockedGetPostsByStatus = vi.mocked(getPostsByStatus)
+const mockedCreateAdminPost = vi.mocked(createAdminPost)
+const mockedGetSections = vi.mocked(getSections)
 const mockedIsAdminAuthorizationError = vi.mocked(isAdminAuthorizationError)
 const mockedSignOut = vi.mocked(signOut)
 
@@ -45,6 +54,9 @@ describe('AdminPostsView', () => {
     routerPush.mockReset()
     routerReplace.mockReset()
     mockedGetPostsByStatus.mockReset()
+    mockedCreateAdminPost.mockReset()
+    mockedGetSections.mockReset()
+    mockedGetSections.mockResolvedValue(sections())
     mockedIsAdminAuthorizationError.mockReset()
     mockedIsAdminAuthorizationError.mockReturnValue(false)
     mockedSignOut.mockReset()
@@ -68,6 +80,7 @@ describe('AdminPostsView', () => {
     expect(wrapper.text()).toContain('Borradores')
     expect(wrapper.text()).toContain('Publicadas')
     expect(wrapper.text()).toContain('Archivadas')
+    expect(wrapper.text()).toContain('Nueva publicación')
 
     const links = wrapper.findAllComponents(RouterLinkStub)
     expect(links.some((link) => linkToObject(link.props('to')).query?.estado === 'borradores')).toBe(
@@ -175,16 +188,97 @@ describe('AdminPostsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.get('button:last-of-type').trigger('click')
+    await buttonByText(wrapper, 'Siguiente').trigger('click')
     await flushPromises()
 
     expect(mockedGetPostsByStatus).toHaveBeenLastCalledWith('DRAFT', 1, 20)
     expect(wrapper.text()).toContain('Página 2 de 2')
 
-    await wrapper.get('button:first-of-type').trigger('click')
+    await buttonByText(wrapper, 'Anterior').trigger('click')
     await flushPromises()
 
     expect(mockedGetPostsByStatus).toHaveBeenLastCalledWith('DRAFT', 0, 20)
+  })
+
+  it('opens create modal and loads sections from the backend service', async () => {
+    mockedGetPostsByStatus.mockResolvedValue(response({ items: [] }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Nueva publicación').trigger('click')
+    await flushPromises()
+
+    expect(mockedGetSections).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('Crear borrador')
+    expect(wrapper.text()).toContain('Taller 1')
+    expect(wrapper.text()).toContain('Parcial 1')
+    expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('taller-1')
+  })
+
+  it('creates a manual draft and navigates to the existing editor', async () => {
+    mockedGetPostsByStatus.mockResolvedValue(response({ items: [] }))
+    let resolveCreate!: (post: AdminPost) => void
+    mockedCreateAdminPost.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Nueva publicación').trigger('click')
+    await flushPromises()
+    await wrapper.find('select').setValue('parcial-1')
+    await wrapper.find('form').trigger('submit')
+    await wrapper.find('form').trigger('submit')
+
+    resolveCreate(adminPost({ id: 10 }))
+    await flushPromises()
+
+    expect(mockedCreateAdminPost).toHaveBeenCalledTimes(1)
+    expect(mockedCreateAdminPost).toHaveBeenCalledWith({ sectionSlug: 'parcial-1' })
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'admin-post-detail',
+      params: { id: 10 },
+    })
+  })
+
+  it('shows a friendly create error without technical details', async () => {
+    mockedGetPostsByStatus.mockResolvedValue(response({ items: [] }))
+    mockedCreateAdminPost.mockRejectedValue(new Error('SQL detail'))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Nueva publicación').trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No pudimos crear el borrador.')
+    expect(wrapper.text()).not.toContain('SQL detail')
+  })
+
+  it('redirects on authorization error while creating a draft', async () => {
+    mockedGetPostsByStatus.mockResolvedValue(response({ items: [] }))
+    mockedCreateAdminPost.mockRejectedValue(new Error('Unauthorized'))
+    mockedIsAdminAuthorizationError.mockReturnValue(true)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Nueva publicación').trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockedSignOut).toHaveBeenCalled()
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'admin-login',
+      query: { reason: 'forbidden' },
+    })
   })
 })
 
@@ -204,6 +298,15 @@ function linkToObject(to: string | Record<string, unknown>): { query?: Record<st
   }
 
   return to as { query?: Record<string, unknown> }
+}
+
+function buttonByText(wrapper: ReturnType<typeof mountView>, text: string) {
+  const button = wrapper.findAll('button').find((candidate) => candidate.text() === text)
+  if (!button) {
+    throw new Error(`Button not found: ${text}`)
+  }
+
+  return button
 }
 
 function response(overrides: Partial<AdminPostsResponse> = {}): AdminPostsResponse {
@@ -236,4 +339,42 @@ function summary(overrides: Partial<AdminPostSummary> = {}): AdminPostSummary {
     publishedAt: null,
     ...overrides,
   }
+}
+
+function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
+  return {
+    id: 10,
+    title: '',
+    content: '',
+    status: 'DRAFT',
+    sourceQuestionId: null,
+    section: sections()[0]!,
+    sourceQuestion: null,
+    tags: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    publishedAt: null,
+    ...overrides,
+  }
+}
+
+function sections(): Section[] {
+  return [
+    {
+      id: 1,
+      type: 'TALLER',
+      name: 'Taller 1',
+      slug: 'taller-1',
+      description: null,
+      displayOrder: 1,
+    },
+    {
+      id: 4,
+      type: 'PARCIAL',
+      name: 'Parcial 1',
+      slug: 'parcial-1',
+      description: null,
+      displayOrder: 4,
+    },
+  ]
 }

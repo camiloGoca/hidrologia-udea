@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  discardManualAdminPost,
   getAdminPost,
   publishAdminPost,
   restoreAdminPost,
@@ -37,6 +38,7 @@ vi.mock('@/services/api/adminPostService', () => ({
   publishAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   archiveAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   restoreAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
+  discardManualAdminPost: vi.fn<(id: number) => Promise<void>>(),
 }))
 
 vi.mock('@/services/api/adminTagService', () => ({
@@ -64,6 +66,7 @@ const mockedUpdateAdminPost = vi.mocked(updateAdminPost)
 const mockedPublishAdminPost = vi.mocked(publishAdminPost)
 const mockedArchiveAdminPost = vi.mocked(archiveAdminPost)
 const mockedRestoreAdminPost = vi.mocked(restoreAdminPost)
+const mockedDiscardManualAdminPost = vi.mocked(discardManualAdminPost)
 const mockedGetAdminTags = vi.mocked(getAdminTags)
 const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedGetSections = vi.mocked(getSections)
@@ -79,6 +82,7 @@ describe('AdminPostEditorView', () => {
     mockedPublishAdminPost.mockReset()
     mockedArchiveAdminPost.mockReset()
     mockedRestoreAdminPost.mockReset()
+    mockedDiscardManualAdminPost.mockReset()
     mockedGetAdminTags.mockReset()
     mockedGetAdminTags.mockResolvedValue(tags())
     mockedDiscardQuestionDraft.mockReset()
@@ -447,6 +451,31 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).not.toContain('Ver pregunta original')
   })
 
+  it('discards a manual draft without calling the question draft endpoint', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        sourceQuestionId: null,
+        sourceQuestion: null,
+      }),
+    )
+    mockedDiscardManualAdminPost.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Descartar borrador').trigger('click')
+    expect(wrapper.text()).toContain('No hay una pregunta de origen asociada')
+    await lastButtonByText(wrapper, 'Descartar borrador').trigger('click')
+    await flushPromises()
+
+    expect(mockedDiscardManualAdminPost).toHaveBeenCalledWith(9)
+    expect(mockedDiscardQuestionDraft).not.toHaveBeenCalled()
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'admin-posts',
+      query: { estado: 'borradores' },
+    })
+  })
+
   it('renders a friendly save error without technical details', async () => {
     mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título', content: 'Contenido' }))
     mockedUpdateAdminPost.mockRejectedValue(new Error('SQL detail'))
@@ -489,6 +518,7 @@ describe('AdminPostEditorView', () => {
     await flushPromises()
 
     expect(mockedDiscardQuestionDraft).toHaveBeenCalledWith(1)
+    expect(mockedDiscardManualAdminPost).not.toHaveBeenCalled()
     expect(routerPush).toHaveBeenCalledWith({
       name: 'admin-question-detail',
       params: { id: 1 },

@@ -439,7 +439,9 @@ En Admin Publications V1 el panel administrativo lista Posts por estado (`DRAFT`
 
 En Admin Hashtags V1 los hashtags se gestionan únicamente desde el panel del profesor. El slug se genera al crear el Tag y queda inmutable al renombrar para conservar URLs públicas como `/hashtags/morfometria`. El listado administrativo calcula `usageCount` sobre todas las relaciones `post_tags`, incluyendo Posts `DRAFT`, `PUBLISHED` y `ARCHIVED`, porque ese conteo determina si el Tag puede eliminarse. El editor de Posts guarda `title`, `content`, `sectionSlug` y `tagIds` en una única operación transaccional. Editar tags actualiza `posts.updated_at`; en Posts publicados el cambio se refleja inmediatamente en la API pública, sin modificar `published_at` ni la StudentQuestion de origen.
 
-Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, creación manual de publicaciones, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
+En Admin Publications V2 el profesor puede crear Posts `DRAFT` manualmente desde el panel administrativo. Estos Posts usan `source_question_id = null`, `published_at = null`, título y contenido inicialmente vacíos, sección activa obligatoria y hashtags vacíos. La publicación posterior reutiliza el flujo editorial existente. Descartar un borrador manual elimina únicamente el Post y no modifica Questions.
+
+Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---
 

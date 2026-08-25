@@ -3,6 +3,7 @@ package edu.udea.hidrologia.post.controller;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +24,7 @@ import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
 import edu.udea.hidrologia.post.dto.AdminPostTagResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.PostStatus;
@@ -121,6 +123,64 @@ class AdminPostControllerTest {
                 .andExpect(jsonPath("$.sourceQuestion.hasAttachment", is(true)))
                 .andExpect(jsonPath("$.sourceQuestion.publicId").doesNotExist())
                 .andExpect(jsonPath("$.publishedAt").doesNotExist());
+    }
+
+    @Test
+    void createsManualDraftPost() throws Exception {
+        when(adminPostService.createManualDraft(Mockito.any(CreatePostRequest.class)))
+                .thenReturn(manualDraftResponse());
+
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "sectionSlug": "taller-1"
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(10)))
+                .andExpect(jsonPath("$.status", is("DRAFT")))
+                .andExpect(jsonPath("$.title", is("")))
+                .andExpect(jsonPath("$.content", is("")))
+                .andExpect(jsonPath("$.sourceQuestionId").doesNotExist())
+                .andExpect(jsonPath("$.sourceQuestion").doesNotExist())
+                .andExpect(jsonPath("$.publishedAt").doesNotExist())
+                .andExpect(jsonPath("$.tags", hasSize(0)));
+    }
+
+    @Test
+    void rejectsManualDraftCreateWithUnsupportedFields() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "sectionSlug": "taller-1",
+                          "status": "PUBLISHED",
+                          "sourceQuestionId": 1,
+                          "publishedAt": "2026-01-01T00:00:00Z"
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsManualDraftCreateWithoutValidSection() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "sectionSlug": ""
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void discardsManualDraftPost() throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/posts/10"))
+                .andExpect(status().isNoContent());
+
+        Mockito.verify(adminPostService).discardManualDraft(10L);
     }
 
     @Test
@@ -335,6 +395,21 @@ class AdminPostControllerTest {
                 1L,
                 section(),
                 sourceQuestion(),
+                List.of(),
+                NOW,
+                NOW,
+                null);
+    }
+
+    private AdminPostResponse manualDraftResponse() {
+        return new AdminPostResponse(
+                10L,
+                "",
+                "",
+                PostStatus.DRAFT,
+                null,
+                section(),
+                null,
                 List.of(),
                 NOW,
                 NOW,

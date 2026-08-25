@@ -31,6 +31,7 @@ import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostService;
@@ -418,9 +419,17 @@ class SecurityConfigTest {
         mockMvc.perform(get("/api/v1/admin/posts"))
                 .andExpect(status().isUnauthorized());
 
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9"))
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish"))
@@ -442,10 +451,20 @@ class SecurityConfigTest {
                 .header("Authorization", "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized());
 
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .header("Authorization", "Bearer invalid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer invalid-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
@@ -470,10 +489,20 @@ class SecurityConfigTest {
                 .header("Authorization", "Bearer other-user-token"))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer other-user-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer other-user-token"))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
@@ -495,10 +524,33 @@ class SecurityConfigTest {
                 .thenReturn(new VerifiedFirebaseToken("admin-uid"));
         when(adminPostService.findPostsByStatus(PostStatus.DRAFT, 0, 20))
                 .thenReturn(new AdminPostsResponse(List.of(), 0, 20, 0, 0));
+        when(adminPostService.createManualDraft(any(CreatePostRequest.class)))
+                .thenReturn(new AdminPostResponse(
+                        10L,
+                        "",
+                        "",
+                        PostStatus.DRAFT,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        null));
 
         mockMvc.perform(get("/api/v1/admin/posts")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/posts")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "sectionSlug": "taller-1"
+                        }
+                        """))
+                .andExpect(status().isCreated());
 
         mockMvc.perform(patch("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer admin-token")
@@ -511,6 +563,10 @@ class SecurityConfigTest {
                         }
                         """))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(post("/api/v1/admin/posts/9/publish")
                 .header("Authorization", "Bearer admin-token"))

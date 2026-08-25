@@ -119,6 +119,20 @@ public class Post {
                 question);
     }
 
+    public static Post createManualDraft(Section section, Instant now) {
+        return new Post(
+                null,
+                section,
+                "",
+                "",
+                PostStatus.DRAFT,
+                now,
+                now,
+                null,
+                new LinkedHashSet<>(),
+                null);
+    }
+
     public void update(String title, String content, Section section, Instant updatedAt) {
         validateEditorialContent(title, content, status);
         this.title = title;

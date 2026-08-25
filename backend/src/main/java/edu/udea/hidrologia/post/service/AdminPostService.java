@@ -19,6 +19,7 @@ import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
 import edu.udea.hidrologia.post.dto.AdminPostTagResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
+import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.Post;
@@ -84,6 +85,16 @@ public class AdminPostService {
     }
 
     @Transactional
+    public AdminPostResponse createManualDraft(@Valid CreatePostRequest request) {
+        Section section = sectionRepository.findBySlugAndActiveTrue(request.sectionSlug().strip())
+                .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
+        Instant now = Instant.now(clock);
+        Post draft = postRepository.saveAndFlush(Post.createManualDraft(section, now));
+
+        return toResponse(draft);
+    }
+
+    @Transactional
     public AdminPostResponse updatePost(Long id, @Valid UpdatePostRequest request) {
         Post post = postRepository.findAdminById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
@@ -101,6 +112,18 @@ public class AdminPostService {
         }
 
         return toResponse(post);
+    }
+
+    @Transactional
+    public void discardManualDraft(Long id) {
+        Post post = postRepository.findAdminById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
+
+        if (post.getStatus() != PostStatus.DRAFT || post.getSourceQuestion() != null) {
+            throw new PostStateConflictException("Only manual draft posts can be discarded here");
+        }
+
+        postRepository.delete(post);
     }
 
     public AdminPostResponse toResponse(Post post) {
