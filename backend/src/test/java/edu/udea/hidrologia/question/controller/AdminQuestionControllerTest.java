@@ -30,7 +30,6 @@ import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.service.AdminQuestionDraftService;
 import edu.udea.hidrologia.question.service.AdminQuestionService;
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
-import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
@@ -101,13 +100,27 @@ class AdminQuestionControllerTest {
     }
 
     @Test
-    void returnsBadRequestForPublishedListInThisPhase() throws Exception {
+    void returnsPublishedQuestionsByStatus() throws Exception {
         when(adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PUBLISHED, 0, 20))
-                .thenThrow(new UnsupportedQuestionStatusFilterException());
+                .thenReturn(new AdminQuestionsResponse(
+                        List.of(new AdminQuestionSummaryResponse(
+                                1L,
+                                null,
+                                section(),
+                                StudentQuestionStatus.PUBLISHED,
+                                "Pregunta",
+                                false,
+                                true,
+                                NOW)),
+                        0,
+                        20,
+                        1,
+                        1));
 
         mockMvc.perform(get("/api/v1/admin/questions?status=PUBLISHED"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status", is(400)));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].status", is("PUBLISHED")))
+                .andExpect(jsonPath("$.items[0].hasLinkedPost", is(true)));
     }
 
     @Test
@@ -191,7 +204,8 @@ class AdminQuestionControllerTest {
                         null,
                         null,
                         NOW,
-                        NOW));
+                        NOW,
+                        null));
 
         mockMvc.perform(post("/api/v1/admin/questions/1/draft"))
                 .andExpect(status().isCreated())

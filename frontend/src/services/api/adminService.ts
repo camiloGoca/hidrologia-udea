@@ -1,7 +1,7 @@
 import { adminHttpClient } from './adminHttpClient'
 
 import type { AdminMeResponse } from '@/types/admin'
-import type { AdminPost } from '@/types/adminPost'
+import type { AdminPost, UpdateAdminPostDraftRequest } from '@/types/adminPost'
 import type {
   AdminQuestionStatus,
   AdminQuestionStatusUpdateResponse,
@@ -16,7 +16,7 @@ export async function getAdminMe(): Promise<AdminMeResponse> {
 }
 
 export async function getQuestionsByStatus(
-  status: Exclude<AdminQuestionStatus, 'PUBLISHED'>,
+  status: AdminQuestionStatus,
   page = 0,
   size = 20,
 ): Promise<AdminQuestionsResponse> {
@@ -73,6 +73,21 @@ export async function discardQuestionDraft(questionId: number): Promise<void> {
 
 export async function getAdminPost(postId: number): Promise<AdminPost> {
   const response = await adminHttpClient.get<AdminPost>(`/admin/posts/${postId}`)
+
+  return response.data
+}
+
+export async function updateAdminPostDraft(
+  postId: number,
+  payload: UpdateAdminPostDraftRequest,
+): Promise<AdminPost> {
+  const response = await adminHttpClient.patch<AdminPost>(`/admin/posts/${postId}`, payload)
+
+  return response.data
+}
+
+export async function publishAdminPost(postId: number): Promise<AdminPost> {
+  const response = await adminHttpClient.post<AdminPost>(`/admin/posts/${postId}/publish`)
 
   return response.data
 }

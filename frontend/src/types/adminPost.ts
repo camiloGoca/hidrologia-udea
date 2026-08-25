@@ -21,4 +21,11 @@ export interface AdminPost {
   sourceQuestion: AdminPostSourceQuestion | null
   createdAt: string
   updatedAt: string
+  publishedAt: string | null
+}
+
+export interface UpdateAdminPostDraftRequest {
+  title: string
+  content: string
+  sectionSlug: string
 }

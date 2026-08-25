@@ -41,7 +41,8 @@ public class AdminQuestionService {
     private static final Set<StudentQuestionStatus> LISTABLE_STATUSES = EnumSet.of(
             StudentQuestionStatus.PENDING,
             StudentQuestionStatus.ARCHIVED,
-            StudentQuestionStatus.REJECTED);
+            StudentQuestionStatus.REJECTED,
+            StudentQuestionStatus.PUBLISHED);
 
     private final StudentQuestionRepository studentQuestionRepository;
     private final PostRepository postRepository;

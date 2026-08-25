@@ -119,7 +119,36 @@ class AdminQuestionServiceTest {
     }
 
     @Test
-    void listsPendingArchivedAndRejectedStatusesOnly() {
+    void listsPublishedQuestionsWithLinkedPostHint() {
+        StudentQuestion question = question(1L, "Goca", "Pregunta publicada", StudentQuestionStatus.PUBLISHED, NOW);
+        Post publishedPost = new Post(
+                9L,
+                question.getSection(),
+                "Título publicado",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PUBLISHED, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(question), pageRequest, 1));
+        when(postRepository.findBySourceQuestionIdIn(Set.of(1L))).thenReturn(List.of(publishedPost));
+
+        AdminQuestionsResponse response = adminQuestionService.findQuestionsByStatus(
+                StudentQuestionStatus.PUBLISHED,
+                0,
+                20);
+
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).status()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(response.items().get(0).hasLinkedPost()).isTrue();
+    }
+
+    @Test
+    void listsPendingArchivedRejectedAndPublishedStatuses() {
         PageRequest pageRequest = pageRequest(0, 20);
         when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.PENDING), eq(pageRequest)))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
@@ -127,13 +156,13 @@ class AdminQuestionServiceTest {
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
         when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.REJECTED), eq(pageRequest)))
                 .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
+        when(studentQuestionRepository.findByStatus(eq(StudentQuestionStatus.PUBLISHED), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(), pageRequest, 0));
 
         adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PENDING, 0, 20);
         adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.ARCHIVED, 0, 20);
         adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.REJECTED, 0, 20);
-
-        assertThatThrownBy(() -> adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PUBLISHED, 0, 20))
-                .isInstanceOf(UnsupportedQuestionStatusFilterException.class);
+        adminQuestionService.findQuestionsByStatus(StudentQuestionStatus.PUBLISHED, 0, 20);
     }
 
     @Test
@@ -239,6 +268,31 @@ class AdminQuestionServiceTest {
         assertThat(response.linkedPost().id()).isEqualTo(9L);
         assertThat(response.linkedPost().status()).isEqualTo(PostStatus.DRAFT);
         assertThat(response.linkedPost().title()).isEmpty();
+    }
+
+    @Test
+    void returnsDetailWithPublishedLinkedPostSummary() {
+        StudentQuestion question = question(1L, "Goca", "Pregunta completa", StudentQuestionStatus.PUBLISHED, NOW);
+        Post publishedPost = new Post(
+                9L,
+                question.getSection(),
+                "Título publicado",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+        when(postRepository.findBySourceQuestionId(1L)).thenReturn(Optional.of(publishedPost));
+
+        AdminQuestionDetailResponse response = adminQuestionService.findQuestionById(1L);
+
+        assertThat(response.linkedPost()).isNotNull();
+        assertThat(response.linkedPost().id()).isEqualTo(9L);
+        assertThat(response.linkedPost().status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(response.linkedPost().title()).isEqualTo("Título publicado");
     }
 
     @Test

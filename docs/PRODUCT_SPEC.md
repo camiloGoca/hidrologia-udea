@@ -314,7 +314,29 @@ Durante la preparación editorial, el profesor puede crear un borrador de public
 * descartar el borrador elimina únicamente la publicación en borrador;
 * la pregunta y su imagen adjunta permanecen intactas.
 
+Implementado en la fase Admin Questions V2B2A:
+
+* el borrador asociado a una pregunta se edita manualmente;
+* guardar cambios es una acción explícita, sin autosave;
+* la sección editorial del Post puede cambiar sin modificar la sección original de la StudentQuestion;
+* publicar requiere título y contenido;
+* publicar actualiza atómicamente el Post y la StudentQuestion;
+* `StudentQuestion.PUBLISHED` significa que la pregunta originó una publicación;
+* la StudentQuestion continúa siendo privada y administrativa;
+* las preguntas publicadas aparecen en una pestaña administrativa propia;
+* el Post publicado queda visible en la API pública;
+* los Posts publicados quedan en solo lectura durante esta fase.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
+
+Futuro:
+
+* edición de publicaciones ya publicadas;
+* módulo administrativo completo de publicaciones;
+* administración y asignación de hashtags desde el editor;
+* archivar publicaciones;
+* imágenes propias de Posts;
+* copia controlada de una QuestionAttachment hacia una imagen de Post.
 
 ---
 

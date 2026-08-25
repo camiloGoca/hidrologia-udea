@@ -27,7 +27,7 @@ vi.mock('vue-router', async (importOriginal) => {
 
 vi.mock('@/services/api/adminService', () => ({
   getQuestionsByStatus: vi.fn<
-    (status: Exclude<AdminQuestionStatus, 'PUBLISHED'>, page?: number, size?: number) => Promise<AdminQuestionsResponse>
+    (status: AdminQuestionStatus, page?: number, size?: number) => Promise<AdminQuestionsResponse>
   >(),
 }))
 
@@ -72,12 +72,16 @@ describe('AdminQuestionsView', () => {
     expect(wrapper.text()).toContain('Pendientes')
     expect(wrapper.text()).toContain('Archivadas')
     expect(wrapper.text()).toContain('Rechazadas')
+    expect(wrapper.text()).toContain('Publicadas')
 
     const links = wrapper.findAllComponents(RouterLinkStub)
     expect(links.some((link) => linkToObject(link.props('to')).query?.estado === 'archivadas')).toBe(
       true,
     )
     expect(links.some((link) => linkToObject(link.props('to')).query?.estado === 'rechazadas')).toBe(
+      true,
+    )
+    expect(links.some((link) => linkToObject(link.props('to')).query?.estado === 'publicadas')).toBe(
       true,
     )
   })
@@ -154,6 +158,32 @@ describe('AdminQuestionsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('No hay preguntas rechazadas.')
+  })
+
+  it('loads published questions and renders published badge and linked post hint', async () => {
+    routeQuery.estado = 'publicadas'
+    mockedGetQuestionsByStatus.mockResolvedValue(
+      response({
+        items: [summary({ status: 'PUBLISHED', hasLinkedPost: true })],
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(mockedGetQuestionsByStatus).toHaveBeenCalledWith('PUBLISHED', 0, 20)
+    expect(wrapper.text()).toContain('PUBLICADA')
+    expect(wrapper.text()).toContain('Generó una publicación')
+  })
+
+  it('renders published questions empty state', async () => {
+    routeQuery.estado = 'publicadas'
+    mockedGetQuestionsByStatus.mockResolvedValue(response({ items: [] }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No hay preguntas publicadas.')
   })
 
   it('renders error state for non authorization failures', async () => {

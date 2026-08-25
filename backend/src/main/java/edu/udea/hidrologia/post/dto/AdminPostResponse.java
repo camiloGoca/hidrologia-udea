@@ -13,5 +13,6 @@ public record AdminPostResponse(
         PostSectionResponse section,
         AdminPostSourceQuestionResponse sourceQuestion,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        Instant publishedAt) {
 }

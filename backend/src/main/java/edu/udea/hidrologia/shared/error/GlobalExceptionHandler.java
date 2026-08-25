@@ -2,6 +2,7 @@ package edu.udea.hidrologia.shared.error;
 
 import java.time.Instant;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,9 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
+import edu.udea.hidrologia.post.service.InvalidPostPublicationException;
+import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
 import edu.udea.hidrologia.question.service.QuestionDraftConflictException;
 import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
@@ -70,7 +74,11 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
-    @ExceptionHandler({InvalidQuestionStatusTransitionException.class, QuestionDraftConflictException.class})
+    @ExceptionHandler({
+            InvalidQuestionStatusTransitionException.class,
+            QuestionDraftConflictException.class,
+            PostStateConflictException.class
+    })
     ResponseEntity<ApiErrorResponse> handleInvalidQuestionStatusTransition(
             RuntimeException exception,
             HttpServletRequest request) {
@@ -86,6 +94,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
+            InvalidPostPublicationException.class,
+            InvalidPostDraftRequestException.class,
+            ConstraintViolationException.class,
             InvalidImageException.class,
             MissingServletRequestPartException.class,
             HttpMessageNotReadableException.class,

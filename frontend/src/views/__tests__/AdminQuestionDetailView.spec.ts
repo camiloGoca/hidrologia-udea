@@ -142,6 +142,7 @@ describe('AdminQuestionDetailView', () => {
       section: baseDetail().section,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
+      publishedAt: null,
     })
 
     const wrapper = mountView()
@@ -219,15 +220,30 @@ describe('AdminQuestionDetailView', () => {
   })
 
   it('does not show V2A actions for published questions', async () => {
-    mockedGetQuestionById.mockResolvedValue(detail({ status: 'PUBLISHED' }))
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'PUBLISHED',
+        linkedPost: { id: 9, status: 'PUBLISHED', title: 'Factor de forma de una cuenca' },
+      }),
+    )
 
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.text()).toContain('PUBLICADA')
+    expect(wrapper.text()).toContain('Publicación asociada')
+    expect(wrapper.text()).toContain('Factor de forma de una cuenca')
+    expect(wrapper.text()).toContain('Ver publicación')
+    expect(wrapper.text()).toContain('Ver en administración')
     expect(wrapper.text()).not.toContain('Archivar')
     expect(wrapper.text()).not.toContain('Rechazar')
     expect(wrapper.text()).not.toContain('Reabrir')
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    expect(links.some((link) => linkToObject(link.props('to')).name === 'post-detail')).toBe(true)
+    expect(links.some((link) => linkToObject(link.props('to')).name === 'admin-post-detail')).toBe(
+      true,
+    )
   })
 
   it('opens and cancels reject confirmation without calling API', async () => {
@@ -359,6 +375,14 @@ function lastButtonByText(wrapper: ReturnType<typeof mountView>, text: string) {
   }
 
   return button
+}
+
+function linkToObject(to: string | Record<string, unknown>): { name?: string } {
+  if (typeof to === 'string') {
+    return {}
+  }
+
+  return to as { name?: string }
 }
 
 function detail(overrides: Partial<AdminQuestionDetail> = {}): AdminQuestionDetail {

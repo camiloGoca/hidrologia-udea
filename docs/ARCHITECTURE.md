@@ -433,6 +433,10 @@ AnalyticsEvent
 
 Mientras el Post asociado esté en `DRAFT`, la StudentQuestion permanece en `PENDING`. Ese borrador bloquea archivar o rechazar la pregunta hasta que sea descartado. Descartar un borrador elimina solo el Post; no elimina la pregunta ni su attachment.
 
+En Admin Questions V2B2A el borrador se edita con guardado manual. La sección del Post puede cambiar de forma independiente a la sección original de la StudentQuestion. La publicación exige título y contenido no vacíos y se realiza en una única transacción: `Post.DRAFT -> Post.PUBLISHED`, `published_at = now` y, si existe pregunta origen, `StudentQuestion.PENDING -> StudentQuestion.PUBLISHED`. La pregunta publicada sigue siendo un recurso privado/admin; el contenido público es el Post publicado.
+
+Quedan para fases futuras: edición de Posts ya publicados, administración/asignación de hashtags desde el editor, archivado de Posts, imágenes propias de Posts y copia explícita de QuestionAttachment hacia Post.
+
 ---
 
 # 11. Autenticación

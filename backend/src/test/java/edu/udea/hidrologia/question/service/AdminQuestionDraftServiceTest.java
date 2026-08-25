@@ -202,7 +202,8 @@ class AdminQuestionDraftServiceTest {
                 null,
                 null,
                 NOW,
-                NOW);
+                NOW,
+                null);
     }
 
     private StudentQuestion withAttachment(StudentQuestion question) {

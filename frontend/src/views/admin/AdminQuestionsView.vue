@@ -32,10 +32,16 @@ const QUESTION_TABS = [
     emptyMessage: 'No hay preguntas rechazadas.',
     loadingMessage: 'Cargando preguntas rechazadas...',
   },
+  {
+    query: 'publicadas',
+    label: 'Publicadas',
+    status: 'PUBLISHED',
+    emptyMessage: 'No hay preguntas publicadas.',
+    loadingMessage: 'Cargando preguntas publicadas...',
+  },
 ] as const
 
 type QuestionTab = (typeof QUESTION_TABS)[number]
-type ListableQuestionStatus = Exclude<AdminQuestionStatus, 'PUBLISHED'>
 
 const route = useRoute()
 const router = useRouter()
@@ -68,7 +74,7 @@ async function loadQuestions(page: number) {
   hasError.value = false
 
   try {
-    response.value = await getQuestionsByStatus(activeTab.value.status as ListableQuestionStatus, page, PAGE_SIZE)
+    response.value = await getQuestionsByStatus(activeTab.value.status as AdminQuestionStatus, page, PAGE_SIZE)
   } catch (error) {
     if (isAdminAuthorizationError(error)) {
       await signOut().catch(() => undefined)
@@ -197,7 +203,11 @@ function formatDate(value: string): string {
                     v-if="question.hasLinkedPost"
                     class="rounded-full bg-sky-100 px-3 py-1 text-sky-950"
                   >
-                    Borrador en preparación
+                    {{
+                      question.status === 'PUBLISHED'
+                        ? 'Generó una publicación'
+                        : 'Borrador en preparación'
+                    }}
                   </span>
                 </div>
 

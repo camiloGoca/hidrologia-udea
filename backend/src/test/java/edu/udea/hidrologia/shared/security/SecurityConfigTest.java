@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,6 +31,7 @@ import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostService;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
@@ -70,6 +72,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminPostService adminPostService;
+
+    @MockitoBean
+    private AdminPostPublicationService adminPostPublicationService;
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;
@@ -371,7 +376,8 @@ class SecurityConfigTest {
                         null,
                         null,
                         Instant.parse("2026-01-01T00:00:00Z"),
-                        Instant.parse("2026-01-01T00:00:00Z")));
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        null));
         when(adminPostService.findAdminPostById(9L))
                 .thenReturn(new AdminPostResponse(
                         9L,
@@ -382,7 +388,8 @@ class SecurityConfigTest {
                         null,
                         null,
                         Instant.parse("2026-01-01T00:00:00Z"),
-                        Instant.parse("2026-01-01T00:00:00Z")));
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        null));
 
         mockMvc.perform(post("/api/v1/admin/questions/1/draft")
                 .header("Authorization", "Bearer admin-token"))
@@ -393,6 +400,71 @@ class SecurityConfigTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void protectsAdminPostUpdateAndPublishWithoutToken() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/publish"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnAdminPostUpdateAndPublish() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer invalid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/publish")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminPostUpdateAndPublish() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/publish")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAdminUidOnAdminPostUpdateAndPublish() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "title": "Título",
+                          "content": "Contenido",
+                          "sectionSlug": "taller-1"
+                        }
+                        """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/posts/9/publish")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
     }

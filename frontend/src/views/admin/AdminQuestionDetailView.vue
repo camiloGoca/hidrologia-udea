@@ -222,6 +222,8 @@ function tabQueryForStatus(status: AdminQuestionDetail['status'] | undefined): s
       return 'archivadas'
     case 'REJECTED':
       return 'rechazadas'
+    case 'PUBLISHED':
+      return 'publicadas'
     default:
       return null
   }
@@ -312,6 +314,33 @@ function formatDate(value: string): string {
             >
               Ver borrador
             </RouterLink>
+          </div>
+
+          <div
+            v-if="question.status === 'PUBLISHED' && question.linkedPost"
+            class="mt-5 rounded-3xl border border-emerald-100 bg-emerald-50 p-5"
+          >
+            <p class="text-sm font-black uppercase text-emerald-900">Publicación asociada</p>
+            <p class="mt-2 text-lg font-black text-slate-950">
+              {{ question.linkedPost.title || 'Sin título' }}
+            </p>
+            <p class="mt-1 text-sm font-bold text-slate-600">
+              Estado: {{ adminQuestionStatusLabel(question.status) }}
+            </p>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <RouterLink
+                :to="{ name: 'post-detail', params: { id: question.linkedPost.id } }"
+                class="inline-flex rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
+              >
+                Ver publicación
+              </RouterLink>
+              <RouterLink
+                :to="{ name: 'admin-post-detail', params: { id: question.linkedPost.id } }"
+                class="inline-flex rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950"
+              >
+                Ver en administración
+              </RouterLink>
+            </div>
           </div>
 
           <p

@@ -118,6 +118,28 @@ public class Post {
                 question);
     }
 
+    public void updateDraft(String title, String content, Section section, Instant updatedAt) {
+        if (status != PostStatus.DRAFT) {
+            throw new IllegalStateException("Only draft posts can be edited");
+        }
+
+        this.title = title;
+        this.content = content;
+        this.section = section;
+        this.updatedAt = updatedAt;
+    }
+
+    public void publish(Instant publishedAt) {
+        if (status != PostStatus.DRAFT) {
+            throw new IllegalStateException("Only draft posts can be published");
+        }
+
+        validateEditorialContent(title, content, PostStatus.PUBLISHED);
+        this.status = PostStatus.PUBLISHED;
+        this.publishedAt = publishedAt;
+        this.updatedAt = publishedAt;
+    }
+
     public Long getId() {
         return id;
     }
