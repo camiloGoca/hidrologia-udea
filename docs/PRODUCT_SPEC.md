@@ -338,11 +338,25 @@ Implementado en la fase Admin Publications V1:
 * `publishedAt` conserva la fecha de primera publicación al archivar y restaurar;
 * `StudentQuestion.PUBLISHED` no cambia cuando se archiva o restaura el Post asociado.
 
+Implementado en la fase Admin Hashtags V1:
+
+* los hashtags son gestionados únicamente por el profesor;
+* el panel administrativo incluye `Admin > Hashtags`;
+* el profesor puede crear, renombrar y eliminar hashtags cuando no tienen usos;
+* el slug se genera automáticamente al crear un hashtag;
+* el slug permanece estable e inmutable al renombrar para conservar URLs públicas;
+* el listado administrativo muestra `usageCount`;
+* un Post puede tener múltiples hashtags;
+* la asignación de hashtags se realiza desde el editor de publicaciones;
+* guardar hashtags, contenido y sección ocurre en una única operación editorial;
+* los cambios guardados sobre un Post `PUBLISHED` se reflejan inmediatamente en la web pública.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
 
-* administración y asignación de hashtags desde el editor;
+* búsqueda avanzada o autocompletado de hashtags;
+* redirects si alguna vez se permite cambiar slugs;
 * creación manual de publicaciones;
 * imágenes propias de Posts;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;

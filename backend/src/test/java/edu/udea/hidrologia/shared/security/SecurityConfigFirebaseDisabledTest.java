@@ -20,6 +20,7 @@ import edu.udea.hidrologia.question.service.AdminQuestionDraftService;
 import edu.udea.hidrologia.question.service.AdminQuestionService;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.section.repository.SectionRepository;
+import edu.udea.hidrologia.tag.service.AdminTagService;
 
 @SpringBootTest(properties = {
         "hidrologia.firebase.enabled=false",
@@ -51,6 +52,9 @@ class SecurityConfigFirebaseDisabledTest {
 
     @MockitoBean
     private AdminPostPublicationService adminPostPublicationService;
+
+    @MockitoBean
+    private AdminTagService adminTagService;
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;

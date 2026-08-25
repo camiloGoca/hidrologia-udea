@@ -66,6 +66,7 @@ describe('adminPostService', () => {
       title: 'Título',
       content: 'Contenido',
       sectionSlug: 'taller-1',
+      tagIds: [1, 2],
     }
     mockedPatch.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
 
@@ -116,6 +117,7 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     publishedAt: null,
+    tags: [],
     ...overrides,
   }
 }

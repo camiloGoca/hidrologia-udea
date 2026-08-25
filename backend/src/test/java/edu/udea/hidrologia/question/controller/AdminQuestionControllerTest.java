@@ -203,6 +203,7 @@ class AdminQuestionControllerTest {
                         1L,
                         null,
                         null,
+                        java.util.List.of(),
                         NOW,
                         NOW,
                         null));

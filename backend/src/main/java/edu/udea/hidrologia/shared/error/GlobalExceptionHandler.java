@@ -25,6 +25,8 @@ import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
 import edu.udea.hidrologia.shared.storage.InvalidImageException;
+import edu.udea.hidrologia.tag.service.InvalidTagRequestException;
+import edu.udea.hidrologia.tag.service.TagConflictException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -77,7 +79,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidQuestionStatusTransitionException.class,
             QuestionDraftConflictException.class,
-            PostStateConflictException.class
+            PostStateConflictException.class,
+            TagConflictException.class
     })
     ResponseEntity<ApiErrorResponse> handleInvalidQuestionStatusTransition(
             RuntimeException exception,
@@ -100,7 +103,8 @@ public class GlobalExceptionHandler {
             InvalidImageException.class,
             MissingServletRequestPartException.class,
             HttpMessageNotReadableException.class,
-            MethodArgumentTypeMismatchException.class
+            MethodArgumentTypeMismatchException.class,
+            InvalidTagRequestException.class
     })
     ResponseEntity<ApiErrorResponse> handleBadRequest(Exception exception, HttpServletRequest request) {
         HttpStatus status = HttpStatus.BAD_REQUEST;

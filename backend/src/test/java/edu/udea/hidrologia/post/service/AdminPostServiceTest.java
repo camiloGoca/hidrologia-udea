@@ -39,6 +39,7 @@ import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 import edu.udea.hidrologia.tag.entity.Tag;
+import edu.udea.hidrologia.tag.repository.TagRepository;
 
 @ExtendWith(MockitoExtension.class)
 class AdminPostServiceTest {
@@ -52,6 +53,9 @@ class AdminPostServiceTest {
     @Mock
     private SectionRepository sectionRepository;
 
+    @Mock
+    private TagRepository tagRepository;
+
     private AdminPostService adminPostService;
 
     @BeforeEach
@@ -59,6 +63,7 @@ class AdminPostServiceTest {
         adminPostService = new AdminPostService(
                 postRepository,
                 sectionRepository,
+                tagRepository,
                 Clock.fixed(UPDATED_AT, ZoneOffset.UTC));
     }
 
@@ -138,7 +143,7 @@ class AdminPostServiceTest {
         Post post = new Post(
                 11L,
                 section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
-                "Título",
+                "Titulo",
                 "Contenido",
                 PostStatus.PUBLISHED,
                 NOW,
@@ -185,10 +190,10 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  Título  ", "  Línea 1\nLínea 2  ", "parcial-1"));
+                new UpdatePostRequest("  Titulo  ", "  Linea 1\nLinea 2  ", "parcial-1", null));
 
-        assertThat(response.title()).isEqualTo("Título");
-        assertThat(response.content()).isEqualTo("Línea 1\nLínea 2");
+        assertThat(response.title()).isEqualTo("Titulo");
+        assertThat(response.content()).isEqualTo("Linea 1\nLinea 2");
         assertThat(response.section().slug()).isEqualTo("parcial-1");
         assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
     }
@@ -201,7 +206,7 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("parcial-1")).thenReturn(Optional.of(newSection));
 
-        adminPostService.updatePost(9L, new UpdatePostRequest("Título", "Contenido", "parcial-1"));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", "Contenido", "parcial-1", null));
 
         assertThat(draft.getSection().getSlug()).isEqualTo("parcial-1");
         assertThat(question.getSection().getSlug()).isEqualTo("taller-1");
@@ -216,7 +221,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("   ", "   ", "taller-1"));
+                new UpdatePostRequest("   ", "   ", "taller-1", null));
 
         assertThat(response.title()).isEmpty();
         assertThat(response.content()).isEmpty();
@@ -240,9 +245,164 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
 
-        adminPostService.updatePost(9L, new UpdatePostRequest("Título", "Contenido", "taller-1"));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", "Contenido", "taller-1", null));
 
         assertThat(draft.getTags()).containsExactly(tag);
+    }
+
+    @Test
+    void removesAllTagsWhenTagIdsIsEmpty() {
+        StudentQuestion question = question();
+        Tag tag = new Tag(1L, "Cuencas", "cuencas", NOW);
+        Post draft = new Post(
+                9L,
+                question.getSection(),
+                "",
+                "",
+                PostStatus.DRAFT,
+                NOW,
+                NOW,
+                null,
+                new LinkedHashSet<>(Set.of(tag)),
+                question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of()));
+
+        assertThat(draft.getTags()).isEmpty();
+        assertThat(response.tags()).isEmpty();
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+    }
+
+    @Test
+    void replacesTagsAndSortsResponseDeterministically() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        Tag cuencas = new Tag(2L, "Cuencas", "cuencas", NOW);
+        Tag balance = new Tag(1L, "balance", "balance", NOW);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(tagRepository.findByIdIn(Set.of(2L, 1L))).thenReturn(List.of(cuencas, balance));
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(2L, 1L)));
+
+        assertThat(draft.getTags()).containsExactly(cuencas, balance);
+        assertThat(response.tags())
+                .extracting("slug")
+                .containsExactly("balance", "cuencas");
+    }
+
+    @Test
+    void normalizesDuplicatedTagIdsToSingleRelationships() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        Tag tag = new Tag(1L, "Cuencas", "cuencas", NOW);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(tagRepository.findByIdIn(Set.of(1L))).thenReturn(List.of(tag));
+
+        adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L, 1L)));
+
+        assertThat(draft.getTags()).containsExactly(tag);
+    }
+
+    @Test
+    void rejectsMissingTagsWithoutPartialMutation() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("parcial-1"))
+                .thenReturn(Optional.of(section(2L, SectionType.PARCIAL, "Parcial 1", "parcial-1")));
+        when(tagRepository.findByIdIn(Set.of(404L))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Nuevo", "Contenido", "parcial-1", List.of(404L))))
+                .isInstanceOf(InvalidPostPublicationException.class)
+                .hasMessage("Uno o más hashtags seleccionados no existen.");
+
+        assertThat(draft.getTitle()).isEmpty();
+        assertThat(draft.getSection().getSlug()).isEqualTo("taller-1");
+        assertThat(draft.getTags()).isEmpty();
+    }
+
+    @Test
+    void rejectsInvalidTagIds() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(0L))))
+                .isInstanceOf(InvalidPostPublicationException.class);
+    }
+
+    @Test
+    void updatesTagsForPublishedPostAndPreservesPublishedAtAndQuestion() {
+        StudentQuestion question = question();
+        question.transitionTo(StudentQuestionStatus.PUBLISHED, NOW);
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Titulo",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        Tag tag = new Tag(1L, "Cuencas", "cuencas", NOW);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(tagRepository.findByIdIn(Set.of(1L))).thenReturn(List.of(tag));
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L)));
+
+        assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(response.publishedAt()).isEqualTo(NOW);
+        assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(response.tags()).extracting("slug").containsExactly("cuencas");
+    }
+
+    @Test
+    void updatesTagsForArchivedPostWithoutChangingStatusOrPublishedAt() {
+        StudentQuestion question = question();
+        Post post = new Post(
+                9L,
+                question.getSection(),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                question);
+        Tag tag = new Tag(1L, "Cuencas", "cuencas", NOW);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(tagRepository.findByIdIn(Set.of(1L))).thenReturn(List.of(tag));
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L)));
+
+        assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
+        assertThat(response.publishedAt()).isEqualTo(NOW);
+        assertThat(response.tags()).extracting("slug").containsExactly("cuencas");
     }
 
     @Test
@@ -252,7 +412,7 @@ class AdminPostServiceTest {
         Post post = new Post(
                 9L,
                 question.getSection(),
-                "Título",
+                "Titulo",
                 "Contenido",
                 PostStatus.PUBLISHED,
                 NOW,
@@ -266,12 +426,12 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  Nuevo título  ", "  Línea 1\nLínea 2  ", "parcial-1"));
+                new UpdatePostRequest("  Nuevo titulo  ", "  Linea 1\nLinea 2  ", "parcial-1", null));
 
         assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
         assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
-        assertThat(response.content()).isEqualTo("Línea 1\nLínea 2");
+        assertThat(response.content()).isEqualTo("Linea 1\nLinea 2");
         assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
         assertThat(question.getSection().getSlug()).isEqualTo("taller-1");
     }
@@ -282,7 +442,7 @@ class AdminPostServiceTest {
         Post post = new Post(
                 9L,
                 question.getSection(),
-                "Título",
+                "Titulo",
                 "Contenido",
                 PostStatus.PUBLISHED,
                 NOW,
@@ -295,7 +455,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  ", "Contenido", "taller-1")))
+                new UpdatePostRequest("  ", "Contenido", "taller-1", null)))
                 .isInstanceOf(InvalidPostPublicationException.class);
     }
 
@@ -305,7 +465,7 @@ class AdminPostServiceTest {
         Post post = new Post(
                 9L,
                 question.getSection(),
-                "Título",
+                "Titulo",
                 "Contenido",
                 PostStatus.ARCHIVED,
                 NOW,
@@ -318,7 +478,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Archivada", "Contenido", "taller-1"));
+                new UpdatePostRequest("Archivada", "Contenido", "taller-1", null));
 
         assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
@@ -331,7 +491,7 @@ class AdminPostServiceTest {
         Post post = new Post(
                 9L,
                 question.getSection(),
-                "Título",
+                "Titulo",
                 "Contenido",
                 PostStatus.ARCHIVED,
                 NOW,
@@ -344,7 +504,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Título", "  ", "taller-1")))
+                new UpdatePostRequest("Titulo", "  ", "taller-1", null)))
                 .isInstanceOf(InvalidPostPublicationException.class);
     }
 
@@ -354,7 +514,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 404L,
-                new UpdatePostRequest("Título", "Contenido", "taller-1")))
+                new UpdatePostRequest("Titulo", "Contenido", "taller-1", null)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Post not found");
     }
@@ -367,7 +527,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Título", "Contenido", "inactiva")))
+                new UpdatePostRequest("Titulo", "Contenido", "inactiva", null)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Section not found");
     }

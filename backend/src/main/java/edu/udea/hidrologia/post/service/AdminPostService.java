@@ -2,6 +2,10 @@ package edu.udea.hidrologia.post.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -13,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
+import edu.udea.hidrologia.post.dto.AdminPostTagResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
@@ -23,6 +28,8 @@ import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
+import edu.udea.hidrologia.tag.entity.Tag;
+import edu.udea.hidrologia.tag.repository.TagRepository;
 import jakarta.validation.Valid;
 
 @Service
@@ -34,11 +41,17 @@ public class AdminPostService {
 
     private final PostRepository postRepository;
     private final SectionRepository sectionRepository;
+    private final TagRepository tagRepository;
     private final Clock clock;
 
-    public AdminPostService(PostRepository postRepository, SectionRepository sectionRepository, Clock clock) {
+    public AdminPostService(
+            PostRepository postRepository,
+            SectionRepository sectionRepository,
+            TagRepository tagRepository,
+            Clock clock) {
         this.postRepository = postRepository;
         this.sectionRepository = sectionRepository;
+        this.tagRepository = tagRepository;
         this.clock = clock;
     }
 
@@ -80,7 +93,12 @@ public class AdminPostService {
         String title = normalize(request.title());
         String content = normalize(request.content());
         validateEditableContent(post, title, content);
-        post.update(title, content, section, Instant.now(clock));
+        List<Tag> tags = resolveTags(request.tagIds());
+        Instant now = Instant.now(clock);
+        post.update(title, content, section, now);
+        if (request.tagIds() != null) {
+            post.replaceTags(tags, now);
+        }
 
         return toResponse(post);
     }
@@ -96,6 +114,7 @@ public class AdminPostService {
                 sourceQuestion == null ? null : sourceQuestion.getId(),
                 toSectionResponse(post.getSection()),
                 sourceQuestion == null ? null : toSourceQuestionResponse(sourceQuestion),
+                toTagResponses(post),
                 post.getCreatedAt(),
                 post.getUpdatedAt(),
                 post.getPublishedAt());
@@ -135,6 +154,27 @@ public class AdminPostService {
         return value.strip();
     }
 
+    private List<Tag> resolveTags(List<Long> tagIds) {
+        if (tagIds == null) {
+            return List.of();
+        }
+
+        Set<Long> uniqueIds = new LinkedHashSet<>(tagIds);
+        if (uniqueIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new InvalidPostPublicationException("Uno o más hashtags seleccionados no existen.");
+        }
+        if (uniqueIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Tag> tags = tagRepository.findByIdIn(uniqueIds);
+        if (tags.size() != uniqueIds.size()) {
+            throw new InvalidPostPublicationException("Uno o más hashtags seleccionados no existen.");
+        }
+
+        return tags;
+    }
+
     private AdminPostSourceQuestionResponse toSourceQuestionResponse(StudentQuestion question) {
         return new AdminPostSourceQuestionResponse(
                 question.getId(),
@@ -152,5 +192,13 @@ public class AdminPostService {
                 section.getName(),
                 section.getSlug(),
                 section.getDescription());
+    }
+
+    private List<AdminPostTagResponse> toTagResponses(Post post) {
+        return post.getTags().stream()
+                .sorted(Comparator.comparing(Tag::getName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Tag::getSlug))
+                .map(tag -> new AdminPostTagResponse(tag.getId(), tag.getName(), tag.getSlug()))
+                .toList();
     }
 }

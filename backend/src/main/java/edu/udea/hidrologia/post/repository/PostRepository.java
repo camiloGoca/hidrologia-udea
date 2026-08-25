@@ -30,7 +30,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @EntityGraph(attributePaths = { "section", "tags" })
     Optional<Post> findByIdAndStatus(Long id, PostStatus status);
 
-    @EntityGraph(attributePaths = { "section", "sourceQuestion", "sourceQuestion.section", "sourceQuestion.attachment" })
+    @EntityGraph(attributePaths = { "section", "sourceQuestion", "sourceQuestion.section", "sourceQuestion.attachment", "tags" })
     @Query("""
             select p
             from Post p

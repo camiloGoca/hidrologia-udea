@@ -12,6 +12,7 @@ import AdminQuestionDetailView from '@/views/admin/AdminQuestionDetailView.vue'
 import AdminQuestionsView from '@/views/admin/AdminQuestionsView.vue'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
 import AdminPostsView from '@/views/admin/AdminPostsView.vue'
+import AdminHashtagsView from '@/views/admin/AdminHashtagsView.vue'
 import AdminLoginView from '@/views/admin/AdminLoginView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
@@ -109,6 +110,11 @@ const router = createRouter({
           path: 'publicaciones/:id',
           name: 'admin-post-detail',
           component: AdminPostEditorView,
+        },
+        {
+          path: 'hashtags',
+          name: 'admin-hashtags',
+          component: AdminHashtagsView,
         },
       ],
     },

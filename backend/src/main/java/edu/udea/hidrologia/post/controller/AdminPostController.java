@@ -2,6 +2,8 @@ package edu.udea.hidrologia.post.controller;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +26,7 @@ import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
 @RequestMapping("/api/v1/admin/posts")
 public class AdminPostController {
 
-    private static final Set<String> UPDATE_POST_FIELDS = Set.of("title", "content", "sectionSlug");
+    private static final Set<String> UPDATE_POST_FIELDS = Set.of("title", "content", "sectionSlug", "tagIds");
 
     private final AdminPostService adminPostService;
     private final AdminPostPublicationService adminPostPublicationService;
@@ -83,7 +85,8 @@ public class AdminPostController {
         return new UpdatePostRequest(
                 requiredString(request, "title"),
                 requiredString(request, "content"),
-                requiredString(request, "sectionSlug"));
+                requiredString(request, "sectionSlug"),
+                optionalPositiveLongList(request, "tagIds"));
     }
 
     private String requiredString(Map<String, Object> request, String field) {
@@ -105,5 +108,27 @@ public class AdminPostController {
         }
 
         return stringValue;
+    }
+
+    private List<Long> optionalPositiveLongList(Map<String, Object> request, String field) {
+        if (!request.containsKey(field) || request.get(field) == null) {
+            return null;
+        }
+
+        Object value = request.get(field);
+        if (!(value instanceof List<?> values)) {
+            throw new InvalidPostDraftRequestException("Post update request is invalid");
+        }
+
+        List<Long> ids = new ArrayList<>();
+        for (Object item : values) {
+            if (!(item instanceof Number number) || number.longValue() <= 0
+                    || Double.compare(number.doubleValue(), number.longValue()) != 0) {
+                throw new InvalidPostDraftRequestException("Post update request is invalid");
+            }
+            ids.add(number.longValue());
+        }
+
+        return ids;
     }
 }

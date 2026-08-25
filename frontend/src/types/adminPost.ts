@@ -11,6 +11,12 @@ export interface AdminPostSourceQuestion {
   hasAttachment: boolean
 }
 
+export interface AdminPostTag {
+  id: number
+  name: string
+  slug: string
+}
+
 export interface AdminPost {
   id: number
   title: string
@@ -19,6 +25,7 @@ export interface AdminPost {
   sourceQuestionId: number | null
   section: AdminQuestionSection
   sourceQuestion: AdminPostSourceQuestion | null
+  tags: AdminPostTag[]
   createdAt: string
   updatedAt: string
   publishedAt: string | null
@@ -48,4 +55,5 @@ export interface UpdateAdminPostRequest {
   title: string
   content: string
   sectionSlug: string
+  tagIds?: number[] | null
 }

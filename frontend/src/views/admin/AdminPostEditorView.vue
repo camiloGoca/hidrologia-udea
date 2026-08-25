@@ -10,9 +10,11 @@ import {
   restoreAdminPost,
   updateAdminPost,
 } from '@/services/api/adminPostService'
+import { getAdminTags } from '@/services/api/adminTagService'
 import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
+import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost } from '@/types/adminPost'
 import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
@@ -23,6 +25,7 @@ const route = useRoute()
 const router = useRouter()
 const post = ref<AdminPost | null>(null)
 const sections = ref<Section[]>([])
+const availableTags = ref<AdminTag[]>([])
 const isLoading = ref(true)
 const hasError = ref(false)
 const pendingAction = ref<ConfirmationAction | null>(null)
@@ -37,11 +40,13 @@ const form = reactive({
   title: '',
   content: '',
   sectionSlug: '',
+  tagIds: [] as number[],
 })
 const saved = reactive({
   title: '',
   content: '',
   sectionSlug: '',
+  tagIds: [] as number[],
 })
 
 const sourceQuestion = computed(() => post.value?.sourceQuestion ?? null)
@@ -57,7 +62,8 @@ const isDirty = computed(
   () =>
     form.title !== saved.title ||
     form.content !== saved.content ||
-    form.sectionSlug !== saved.sectionSlug,
+    form.sectionSlug !== saved.sectionSlug ||
+    !sameIds(form.tagIds, saved.tagIds),
 )
 const hasRequiredPublishedContent = computed(
   () => form.title.trim().length > 0 && form.content.trim().length > 0,
@@ -150,9 +156,14 @@ async function loadPost() {
   hasError.value = false
 
   try {
-    const [postResponse, sectionResponse] = await Promise.all([getAdminPost(id), getSections()])
+    const [postResponse, sectionResponse, tagResponse] = await Promise.all([
+      getAdminPost(id),
+      getSections(),
+      getAdminTags(),
+    ])
     post.value = postResponse
     sections.value = sectionResponse
+    availableTags.value = tagResponse
     syncForm(postResponse)
   } catch (error) {
     await handleError(error, () => {
@@ -178,6 +189,7 @@ async function savePost() {
       title: form.title,
       content: form.content,
       sectionSlug: form.sectionSlug,
+      tagIds: [...form.tagIds],
     })
     post.value = updatedPost
     syncForm(updatedPost)
@@ -300,13 +312,29 @@ function syncForm(currentPost: AdminPost) {
   form.title = currentPost.title
   form.content = currentPost.content
   form.sectionSlug = currentPost.section.slug
+  form.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
   saved.title = currentPost.title
   saved.content = currentPost.content
   saved.sectionSlug = currentPost.section.slug
+  saved.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
 }
 
 function sectionsByType(type: SectionType) {
   return sections.value.filter((section) => section.type === type)
+}
+
+function sortedIds(ids: number[]) {
+  return [...new Set(ids)].sort((left, right) => left - right)
+}
+
+function sameIds(left: number[], right: number[]) {
+  const sortedLeft = sortedIds(left)
+  const sortedRight = sortedIds(right)
+
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((id, index) => id === sortedRight[index])
+  )
 }
 </script>
 
@@ -496,6 +524,41 @@ function sectionsByType(type: SectionType) {
                 class="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base leading-7 text-slate-950 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
               />
             </div>
+
+            <fieldset class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <legend class="px-2 text-sm font-black uppercase text-emerald-700">
+                Hashtags
+              </legend>
+              <p class="mt-2 text-sm leading-6 text-slate-600">
+                Los hashtags se guardan junto con el contenido y la sección de la publicación.
+              </p>
+
+              <div v-if="availableTags.length" class="mt-4 flex flex-wrap gap-3">
+                <label
+                  v-for="tag in availableTags"
+                  :key="tag.id"
+                  class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-700 has-[:checked]:text-white"
+                >
+                  <input
+                    v-model="form.tagIds"
+                    type="checkbox"
+                    class="size-4 accent-emerald-700"
+                    :value="tag.id"
+                  />
+                  #{{ tag.name }}
+                </label>
+              </div>
+
+              <p v-else class="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600">
+                No hay hashtags creados todavía.
+                <RouterLink
+                  :to="{ name: 'admin-hashtags' }"
+                  class="text-emerald-800 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
+                >
+                  Crear hashtags
+                </RouterLink>
+              </p>
+            </fieldset>
 
             <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button

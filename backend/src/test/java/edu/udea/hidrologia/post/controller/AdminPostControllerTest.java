@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
+import edu.udea.hidrologia.post.dto.AdminPostTagResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
@@ -133,6 +134,7 @@ class AdminPostControllerTest {
                         1L,
                         section(),
                         sourceQuestion(),
+                        List.of(new AdminPostTagResponse(1L, "Morfometría", "morfometria")),
                         NOW,
                         NOW,
                         NOW));
@@ -143,13 +145,16 @@ class AdminPostControllerTest {
                         {
                           "title": "  Título guardado  ",
                           "content": "  Línea 1\\nLínea 2  ",
-                          "sectionSlug": "taller-1"
+                          "sectionSlug": "taller-1",
+                          "tagIds": [1, 1]
                         }
                         """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title", is("Título guardado")))
                 .andExpect(jsonPath("$.content", is("Línea 1\nLínea 2")))
-                .andExpect(jsonPath("$.status", is("PUBLISHED")));
+                .andExpect(jsonPath("$.status", is("PUBLISHED")))
+                .andExpect(jsonPath("$.tags[0].id", is(1)))
+                .andExpect(jsonPath("$.tags[0].slug", is("morfometria")));
     }
 
     @Test
@@ -176,6 +181,56 @@ class AdminPostControllerTest {
                           "content": "Contenido",
                           "sectionSlug": "taller-1",
                           "status": "PUBLISHED"
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void allowsTagIdsToBeOmittedForCompatibility() throws Exception {
+        when(adminPostService.updatePost(Mockito.eq(9L), Mockito.any(UpdatePostRequest.class)))
+                .thenReturn(draftResponse());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "title": "Título",
+                          "content": "Contenido",
+                          "sectionSlug": "taller-1"
+                        }
+                        """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void acceptsEmptyTagIdsToRemoveAllTags() throws Exception {
+        when(adminPostService.updatePost(Mockito.eq(9L), Mockito.any(UpdatePostRequest.class)))
+                .thenReturn(draftResponse());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "title": "Título",
+                          "content": "Contenido",
+                          "sectionSlug": "taller-1",
+                          "tagIds": []
+                        }
+                        """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsInvalidTagIds() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "title": "Título",
+                          "content": "Contenido",
+                          "sectionSlug": "taller-1",
+                          "tagIds": [0]
                         }
                         """))
                 .andExpect(status().isBadRequest());
@@ -280,6 +335,7 @@ class AdminPostControllerTest {
                 1L,
                 section(),
                 sourceQuestion(),
+                List.of(),
                 NOW,
                 NOW,
                 null);
@@ -294,6 +350,7 @@ class AdminPostControllerTest {
                 1L,
                 section(),
                 sourceQuestion(),
+                List.of(),
                 NOW,
                 NOW,
                 NOW);
@@ -308,6 +365,7 @@ class AdminPostControllerTest {
                 1L,
                 section(),
                 sourceQuestion(),
+                List.of(),
                 NOW,
                 NOW,
                 NOW);

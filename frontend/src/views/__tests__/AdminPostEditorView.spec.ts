@@ -9,9 +9,11 @@ import {
   restoreAdminPost,
   updateAdminPost,
 } from '@/services/api/adminPostService'
+import { getAdminTags } from '@/services/api/adminTagService'
 import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
+import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost } from '@/types/adminPost'
 import type { Section } from '@/types/section'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
@@ -37,6 +39,10 @@ vi.mock('@/services/api/adminPostService', () => ({
   restoreAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
 }))
 
+vi.mock('@/services/api/adminTagService', () => ({
+  getAdminTags: vi.fn<() => Promise<AdminTag[]>>(),
+}))
+
 vi.mock('@/services/api/adminService', () => ({
   discardQuestionDraft: vi.fn<(questionId: number) => Promise<void>>(),
 }))
@@ -58,6 +64,7 @@ const mockedUpdateAdminPost = vi.mocked(updateAdminPost)
 const mockedPublishAdminPost = vi.mocked(publishAdminPost)
 const mockedArchiveAdminPost = vi.mocked(archiveAdminPost)
 const mockedRestoreAdminPost = vi.mocked(restoreAdminPost)
+const mockedGetAdminTags = vi.mocked(getAdminTags)
 const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedGetSections = vi.mocked(getSections)
 const mockedIsAdminAuthorizationError = vi.mocked(isAdminAuthorizationError)
@@ -72,6 +79,8 @@ describe('AdminPostEditorView', () => {
     mockedPublishAdminPost.mockReset()
     mockedArchiveAdminPost.mockReset()
     mockedRestoreAdminPost.mockReset()
+    mockedGetAdminTags.mockReset()
+    mockedGetAdminTags.mockResolvedValue(tags())
     mockedDiscardQuestionDraft.mockReset()
     mockedGetSections.mockReset()
     mockedGetSections.mockResolvedValue(sections())
@@ -89,7 +98,7 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).toContain('Cargando publicación...')
   })
 
-  it('renders draft editor with source question and no post image or hashtags controls', async () => {
+  it('renders draft editor with source question and hashtags controls but no post image', async () => {
     mockedGetAdminPost.mockResolvedValue(adminPost())
 
     const wrapper = mountView()
@@ -107,7 +116,8 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).toContain('<strong>No HTML</strong>')
     expect(wrapper.find('strong').exists()).toBe(false)
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Hashtags')
+    expect(wrapper.text()).toContain('Hashtags')
+    expect(wrapper.text()).toContain('#Morfometría')
   })
 
   it('tracks dirty state and saves a draft manually', async () => {
@@ -138,9 +148,82 @@ describe('AdminPostEditorView', () => {
       title: 'Título guardado',
       content: 'Línea 1\nLínea 2',
       sectionSlug: 'parcial-1',
+      tagIds: [],
     })
     expect(wrapper.text()).toContain('Borrador guardado.')
     expect(wrapper.text()).not.toContain('Cambios sin guardar')
+  })
+
+  it('renders assigned tags as selected and saves tagIds with the post', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título',
+        content: 'Contenido',
+        tags: [tagAt(0)],
+      }),
+    )
+    mockedUpdateAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Título',
+        content: 'Contenido',
+        tags: tags(),
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
+    expect(checkboxes).toHaveLength(2)
+    expect(checkboxes[0]!.element.checked).toBe(true)
+    expect(checkboxes[1]!.element.checked).toBe(false)
+
+    await checkboxes[1]!.setValue(true)
+    expect(wrapper.text()).toContain('Cambios sin guardar')
+    expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
+      title: 'Título',
+      content: 'Contenido',
+      sectionSlug: 'taller-1',
+      tagIds: [1, 2],
+    })
+    expect(wrapper.text()).not.toContain('Cambios sin guardar')
+  })
+
+  it('blocks archive and restore while tag changes are dirty', async () => {
+    mockedGetAdminPost.mockResolvedValueOnce(
+      adminPost({
+        title: 'Título',
+        content: 'Contenido',
+        status: 'PUBLISHED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+
+    const publishedWrapper = mountView()
+    await flushPromises()
+    await publishedWrapper.find('input[type="checkbox"]').setValue(true)
+
+    expect(buttonByText(publishedWrapper, 'Archivar publicación').attributes('disabled')).toBeDefined()
+
+    mockedGetAdminPost.mockResolvedValueOnce(
+      adminPost({
+        title: 'Título',
+        content: 'Contenido',
+        status: 'ARCHIVED',
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+
+    const archivedWrapper = mountView()
+    await flushPromises()
+    await archivedWrapper.find('input[type="checkbox"]').setValue(true)
+
+    expect(buttonByText(archivedWrapper, 'Restaurar publicación').attributes('disabled')).toBeDefined()
   })
 
   it('keeps draft publish disabled until valid content is saved', async () => {
@@ -249,6 +332,7 @@ describe('AdminPostEditorView', () => {
       title: 'Título actualizado',
       content: 'Contenido',
       sectionSlug: 'taller-1',
+      tagIds: [],
     })
     expect(wrapper.text()).toContain('Publicación actualizada.')
     expect(wrapper.text()).toContain('PUBLICADA')
@@ -489,6 +573,7 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     publishedAt: null,
+    tags: [],
     ...overrides,
   }
 }
@@ -512,4 +597,30 @@ function sections(): Section[] {
       displayOrder: 4,
     },
   ]
+}
+
+function tags(): AdminTag[] {
+  return [
+    {
+      id: 1,
+      name: 'Morfometría',
+      slug: 'morfometria',
+      usageCount: 1,
+    },
+    {
+      id: 2,
+      name: 'Cuencas',
+      slug: 'cuencas',
+      usageCount: 0,
+    },
+  ]
+}
+
+function tagAt(index: number): AdminTag {
+  const tag = tags()[index]
+  if (!tag) {
+    throw new Error(`Missing tag at index ${index}`)
+  }
+
+  return tag
 }

@@ -29,6 +29,7 @@ import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
+import edu.udea.hidrologia.tag.repository.TagRepository;
 
 @ExtendWith(MockitoExtension.class)
 class AdminPostPublicationServiceTest {
@@ -42,6 +43,9 @@ class AdminPostPublicationServiceTest {
     @Mock
     private SectionRepository sectionRepository;
 
+    @Mock
+    private TagRepository tagRepository;
+
     private AdminPostPublicationService publicationService;
 
     @BeforeEach
@@ -49,6 +53,7 @@ class AdminPostPublicationServiceTest {
         AdminPostService adminPostService = new AdminPostService(
                 postRepository,
                 sectionRepository,
+                tagRepository,
                 Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC));
         publicationService = new AdminPostPublicationService(
                 postRepository,

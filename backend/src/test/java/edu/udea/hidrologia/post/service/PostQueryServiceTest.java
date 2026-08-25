@@ -155,6 +155,32 @@ class PostQueryServiceTest {
     }
 
     @Test
+    void returnsRenamedTagMetadataThroughStableSlug() {
+        Tag tag = new Tag(1L, "Morfometría de cuencas", "morfometria", CREATED_AT);
+        when(tagRepository.findBySlug("morfometria")).thenReturn(Optional.of(tag));
+        when(postRepository.findByTagSlugAndStatusOrderByPublishedAtDescIdDesc("morfometria", PostStatus.PUBLISHED))
+                .thenReturn(List.of());
+
+        TagPostsResponse response = postQueryService.findPublishedPostsByTag("morfometria");
+
+        assertThat(response.tag().name()).isEqualTo("Morfometría de cuencas");
+        assertThat(response.tag().slug()).isEqualTo("morfometria");
+    }
+
+    @Test
+    void draftAndArchivedPostsWithTagAreNotReturnedPublicly() {
+        Tag tag = tag();
+        when(tagRepository.findBySlug("morfometria")).thenReturn(Optional.of(tag));
+        when(postRepository.findByTagSlugAndStatusOrderByPublishedAtDescIdDesc("morfometria", PostStatus.PUBLISHED))
+                .thenReturn(List.of());
+
+        TagPostsResponse response = postQueryService.findPublishedPostsByTag("morfometria");
+
+        assertThat(response.posts()).isEmpty();
+        verify(postRepository).findByTagSlugAndStatusOrderByPublishedAtDescIdDesc("morfometria", PostStatus.PUBLISHED);
+    }
+
+    @Test
     void sortsTagsDeterministicallyByNameThenSlug() {
         Section section = section();
         Tag balance = new Tag(2L, "Balance", "balance", CREATED_AT);

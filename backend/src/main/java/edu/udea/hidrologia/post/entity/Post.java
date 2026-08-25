@@ -1,6 +1,7 @@
 package edu.udea.hidrologia.post.entity;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -123,6 +124,12 @@ public class Post {
         this.title = title;
         this.content = content;
         this.section = section;
+        this.updatedAt = updatedAt;
+    }
+
+    public void replaceTags(Collection<Tag> tags, Instant updatedAt) {
+        this.tags.clear();
+        this.tags.addAll(tags);
         this.updatedAt = updatedAt;
     }
 

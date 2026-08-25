@@ -42,6 +42,9 @@ describe('router', () => {
       ),
     ).toBe(true)
     expect(
+      routes.some((route) => route.path === '/admin/hashtags' && route.name === 'admin-hashtags'),
+    ).toBe(true)
+    expect(
       routes.some((route) => route.path === '/:pathMatch(.*)*' && route.name === 'not-found'),
     ).toBe(true)
   })
@@ -50,9 +53,11 @@ describe('router', () => {
     const adminRoute = router.resolve('/admin/preguntas')
     const detailRoute = router.resolve('/admin/preguntas/1')
     const postRoute = router.resolve('/admin/publicaciones/9')
+    const tagsRoute = router.resolve('/admin/hashtags')
 
     expect(adminRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(detailRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(postRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
+    expect(tagsRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
   })
 })

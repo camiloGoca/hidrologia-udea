@@ -437,7 +437,9 @@ En Admin Questions V2B2A el borrador se edita con guardado manual. La sección d
 
 En Admin Publications V1 el panel administrativo lista Posts por estado (`DRAFT`, `PUBLISHED`, `ARCHIVED`) con paginación y orden editorial por `updated_at DESC, id DESC`. Los tres estados permiten edición con guardado manual. Los Posts publicados requieren título y contenido válidos, y sus cambios guardados impactan inmediatamente la API pública. Los Posts archivados no aparecen en endpoints públicos, pero pueden editarse y restaurarse. Las transiciones `PUBLISHED -> ARCHIVED` y `ARCHIVED -> PUBLISHED` preservan `published_at` y no modifican la StudentQuestion de origen.
 
-Quedan para fases futuras: administración/asignación de hashtags desde el editor, creación manual de publicaciones, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
+En Admin Hashtags V1 los hashtags se gestionan únicamente desde el panel del profesor. El slug se genera al crear el Tag y queda inmutable al renombrar para conservar URLs públicas como `/hashtags/morfometria`. El listado administrativo calcula `usageCount` sobre todas las relaciones `post_tags`, incluyendo Posts `DRAFT`, `PUBLISHED` y `ARCHIVED`, porque ese conteo determina si el Tag puede eliminarse. El editor de Posts guarda `title`, `content`, `sectionSlug` y `tagIds` en una única operación transaccional. Editar tags actualiza `posts.updated_at`; en Posts publicados el cambio se refleja inmediatamente en la API pública, sin modificar `published_at` ni la StudentQuestion de origen.
+
+Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, creación manual de publicaciones, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---
 

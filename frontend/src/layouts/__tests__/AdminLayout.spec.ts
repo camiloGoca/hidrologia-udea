@@ -41,6 +41,8 @@ describe('AdminLayout', () => {
     expect(wrapper.text()).toContain('Hidrología UdeA')
     expect(wrapper.text()).toContain('Inicio')
     expect(wrapper.text()).toContain('Preguntas')
+    expect(wrapper.text()).toContain('Publicaciones')
+    expect(wrapper.text()).toContain('Hashtags')
     expect(wrapper.text()).toContain('Cerrar sesión')
   })
 

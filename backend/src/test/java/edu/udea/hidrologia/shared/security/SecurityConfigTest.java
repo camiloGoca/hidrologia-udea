@@ -47,6 +47,9 @@ import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.shared.firebase.FirebaseTokenVerificationException;
 import edu.udea.hidrologia.shared.firebase.FirebaseTokenVerifier;
 import edu.udea.hidrologia.shared.firebase.VerifiedFirebaseToken;
+import edu.udea.hidrologia.tag.dto.AdminTagResponse;
+import edu.udea.hidrologia.tag.dto.UpsertTagRequest;
+import edu.udea.hidrologia.tag.service.AdminTagService;
 import edu.udea.hidrologia.tag.dto.TagResponse;
 
 @SpringBootTest(properties = "hidrologia.firebase.admin-uid=admin-uid")
@@ -76,6 +79,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminPostPublicationService adminPostPublicationService;
+
+    @MockitoBean
+    private AdminTagService adminTagService;
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;
@@ -376,6 +382,7 @@ class SecurityConfigTest {
                         1L,
                         null,
                         null,
+                        List.of(),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         null));
@@ -388,6 +395,7 @@ class SecurityConfigTest {
                         1L,
                         null,
                         null,
+                        List.of(),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         null));
@@ -515,5 +523,114 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/posts/9/restore")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void protectsAdminTagEndpointsWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/tags"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/tags")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/admin/tags/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/tags/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnAdminTagEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(get("/api/v1/admin/tags")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/tags")
+                .header("Authorization", "Bearer invalid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer invalid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminTagEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/tags")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/tags")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAdminUidOnAdminTagEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+        when(adminTagService.create(any(UpsertTagRequest.class)))
+                .thenReturn(new AdminTagResponse(1L, "Morfometría", "morfometria", 0));
+        when(adminTagService.rename(eq(1L), any(UpsertTagRequest.class)))
+                .thenReturn(new AdminTagResponse(1L, "Morfometría de cuencas", "morfometria", 0));
+
+        mockMvc.perform(get("/api/v1/admin/tags")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/tags")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "name": "Morfometría"
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(patch("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "name": "Morfometría de cuencas"
+                        }
+                        """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
     }
 }
