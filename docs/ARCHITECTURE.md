@@ -309,6 +309,20 @@ updated_at
 published_at
 ```
 
+`source_question_id` es nullable: una publicación puede originarse en una pregunta de estudiante o ser creada directamente por el profesor en una fase futura.
+
+Cuando existe, la relación es conceptualmente:
+
+```text
+StudentQuestion 1 -> 0..1 Post
+```
+
+La base de datos debe proteger esta regla con una restricción única sobre `posts.source_question_id`.
+
+El vínculo usa `ON DELETE RESTRICT` para evitar perder trazabilidad editorial si una pregunta ya originó una publicación o borrador. La eliminación definitiva de preguntas deberá resolver explícitamente esta relación en una fase futura.
+
+Los posts en estado `DRAFT` pueden tener título y contenido incompletos. Los posts públicos o archivados deben conservar título y contenido válidos.
+
 ---
 
 ## Tag
@@ -417,6 +431,8 @@ AnalyticsEvent
   referencia recursos cuando corresponde
 ```
 
+Mientras el Post asociado esté en `DRAFT`, la StudentQuestion permanece en `PENDING`. Ese borrador bloquea archivar o rechazar la pregunta hasta que sea descartado. Descartar un borrador elimina solo el Post; no elimina la pregunta ni su attachment.
+
 ---
 
 # 11. Autenticación
@@ -481,6 +497,8 @@ Validar:
 * errores de carga.
 
 PostgreSQL guarda referencias, no el archivo binario.
+
+Las imágenes adjuntas a preguntas permanecen privadas del flujo administrativo. No se copian automáticamente a Posts. Si una publicación futura reutiliza una imagen de pregunta, deberá hacerlo mediante una copia independiente propiedad del Post.
 
 ---
 

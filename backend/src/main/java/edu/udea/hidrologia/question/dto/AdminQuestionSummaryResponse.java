@@ -11,5 +11,6 @@ public record AdminQuestionSummaryResponse(
         StudentQuestionStatus status,
         String questionPreview,
         boolean hasAttachment,
+        boolean hasLinkedPost,
         Instant createdAt) {
 }

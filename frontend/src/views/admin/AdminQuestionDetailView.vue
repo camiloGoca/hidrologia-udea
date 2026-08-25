@@ -5,6 +5,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveQuestion,
+  createQuestionDraft,
+  discardQuestionDraft,
   getQuestionById,
   rejectQuestion,
   reopenQuestion,
@@ -13,9 +15,28 @@ import { signOut } from '@/services/firebase/authService'
 import type { AdminQuestionDetail } from '@/types/adminQuestion'
 import { adminQuestionStatusLabel } from '@/utils/adminQuestionStatus'
 
-type QuestionAction = 'archive' | 'reject' | 'reopen'
+type QuestionAction = 'createDraft' | 'discardDraft' | 'archive' | 'reject' | 'reopen'
 
 const ACTION_CONFIG = {
+  createDraft: {
+    label: 'Crear borrador de publicación',
+    title: '¿Crear un borrador a partir de esta pregunta?',
+    description: 'La pregunta seguirá pendiente mientras preparas la publicación.',
+    confirmLabel: 'Crear borrador',
+    successMessage: '',
+    buttonClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
+    confirmClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
+  },
+  discardDraft: {
+    label: 'Descartar borrador',
+    title: '¿Descartar este borrador?',
+    description:
+      'El borrador se eliminará. La pregunta original y su imagen permanecerán intactas y seguirán pendientes.',
+    confirmLabel: 'Descartar borrador',
+    successMessage: 'El borrador fue descartado.',
+    buttonClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+    confirmClass: 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-800',
+  },
   archive: {
     label: 'Archivar',
     title: '¿Archivar esta pregunta?',
@@ -58,6 +79,7 @@ const cancelButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
 
 const displayNickname = computed(() => question.value?.nickname ?? 'Anónimo')
+const hasDraft = computed(() => question.value?.linkedPost?.status === 'DRAFT')
 const currentActionConfig = computed(() =>
   pendingAction.value ? ACTION_CONFIG[pendingAction.value] : null,
 )
@@ -67,7 +89,7 @@ const availableActions = computed<QuestionAction[]>(() => {
   }
 
   if (question.value.status === 'PENDING') {
-    return ['archive', 'reject']
+    return hasDraft.value ? ['discardDraft'] : ['createDraft', 'archive', 'reject']
   }
 
   if (question.value.status === 'ARCHIVED' || question.value.status === 'REJECTED') {
@@ -138,7 +160,25 @@ async function confirmAction() {
   actionSuccessMessage.value = ''
 
   try {
-    const result = await runAction(pendingAction.value, question.value.id)
+    if (pendingAction.value === 'createDraft') {
+      const draft = await createQuestionDraft(question.value.id)
+      pendingAction.value = null
+      await router.push({ name: 'admin-post-detail', params: { id: draft.id } })
+      return
+    }
+
+    if (pendingAction.value === 'discardDraft') {
+      await discardQuestionDraft(question.value.id)
+      question.value = {
+        ...question.value,
+        linkedPost: null,
+      }
+      actionSuccessMessage.value = ACTION_CONFIG[pendingAction.value].successMessage
+      pendingAction.value = null
+      return
+    }
+
+    const result = await runStatusAction(pendingAction.value, question.value.id)
     question.value = {
       ...question.value,
       status: result.status,
@@ -159,7 +199,7 @@ async function confirmAction() {
   }
 }
 
-function runAction(action: QuestionAction, id: number) {
+function runStatusAction(action: Exclude<QuestionAction, 'createDraft' | 'discardDraft'>, id: number) {
   switch (action) {
     case 'archive':
       return archiveQuestion(id)
@@ -256,6 +296,22 @@ function formatDate(value: string): string {
                 {{ ACTION_CONFIG[action].label }}
               </button>
             </div>
+          </div>
+
+          <div
+            v-if="hasDraft && question.linkedPost"
+            class="mt-5 rounded-3xl border border-sky-100 bg-sky-50 p-5"
+          >
+            <p class="text-sm font-black uppercase text-sky-950">Borrador en preparación</p>
+            <p class="mt-2 text-sm leading-6 text-slate-700">
+              Esta pregunta sigue pendiente mientras preparas el borrador de publicación.
+            </p>
+            <RouterLink
+              :to="{ name: 'admin-post-detail', params: { id: question.linkedPost.id } }"
+              class="mt-4 inline-flex rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950"
+            >
+              Ver borrador
+            </RouterLink>
           </div>
 
           <p

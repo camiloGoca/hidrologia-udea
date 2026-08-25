@@ -3,6 +3,7 @@ package edu.udea.hidrologia.question.controller;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,7 +24,10 @@ import edu.udea.hidrologia.question.dto.AdminQuestionSectionResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSummaryResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
+import edu.udea.hidrologia.post.dto.AdminPostResponse;
+import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
+import edu.udea.hidrologia.question.service.AdminQuestionDraftService;
 import edu.udea.hidrologia.question.service.AdminQuestionService;
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
 import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
@@ -36,12 +40,16 @@ class AdminQuestionControllerTest {
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
     private AdminQuestionService adminQuestionService;
+    private AdminQuestionDraftService adminQuestionDraftService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         adminQuestionService = Mockito.mock(AdminQuestionService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminQuestionController(adminQuestionService))
+        adminQuestionDraftService = Mockito.mock(AdminQuestionDraftService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminQuestionController(
+                        adminQuestionService,
+                        adminQuestionDraftService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -57,6 +65,7 @@ class AdminQuestionControllerTest {
                                 StudentQuestionStatus.ARCHIVED,
                                 "Pregunta",
                                 true,
+                                false,
                                 NOW)),
                         2,
                         10,
@@ -117,7 +126,8 @@ class AdminQuestionControllerTest {
                                 "png",
                                 640,
                                 480,
-                                1000L)));
+                                1000L),
+                        null));
 
         mockMvc.perform(get("/api/v1/admin/questions/1"))
                 .andExpect(status().isOk())
@@ -167,6 +177,42 @@ class AdminQuestionControllerTest {
         mockMvc.perform(post("/api/v1/admin/questions/1/reopen"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("PENDING")));
+    }
+
+    @Test
+    void createsQuestionDraftWithLocationHeader() throws Exception {
+        when(adminQuestionDraftService.createDraft(1L))
+                .thenReturn(new AdminPostResponse(
+                        9L,
+                        "",
+                        "",
+                        PostStatus.DRAFT,
+                        1L,
+                        null,
+                        null,
+                        NOW,
+                        NOW));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/draft"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(9)))
+                .andExpect(jsonPath("$.status", is("DRAFT")))
+                .andExpect(jsonPath("$.sourceQuestionId", is(1)))
+                .andExpect(jsonPath("$.title", is("")))
+                .andExpect(jsonPath("$.content", is("")))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(
+                        result.getResponse().getHeader("Location"))
+                        .isEqualTo("/api/v1/admin/posts/9"));
+
+        verify(adminQuestionDraftService).createDraft(1L);
+    }
+
+    @Test
+    void discardsQuestionDraft() throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/questions/1/draft"))
+                .andExpect(status().isNoContent());
+
+        verify(adminQuestionDraftService).discardDraft(1L);
     }
 
     @Test

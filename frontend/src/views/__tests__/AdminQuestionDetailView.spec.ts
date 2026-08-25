@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveQuestion,
+  createQuestionDraft,
+  discardQuestionDraft,
   getQuestionById,
   rejectQuestion,
   reopenQuestion,
@@ -28,6 +30,8 @@ vi.mock('vue-router', async (importOriginal) => {
 
 vi.mock('@/services/api/adminService', () => ({
   getQuestionById: vi.fn<(id: number) => Promise<AdminQuestionDetail>>(),
+  createQuestionDraft: vi.fn<(id: number) => Promise<unknown>>(),
+  discardQuestionDraft: vi.fn<(id: number) => Promise<void>>(),
   rejectQuestion: vi.fn<(id: number) => Promise<AdminQuestionStatusUpdateResponse>>(),
   archiveQuestion: vi.fn<(id: number) => Promise<AdminQuestionStatusUpdateResponse>>(),
   reopenQuestion: vi.fn<(id: number) => Promise<AdminQuestionStatusUpdateResponse>>(),
@@ -42,6 +46,8 @@ vi.mock('@/services/firebase/authService', () => ({
 }))
 
 const mockedGetQuestionById = vi.mocked(getQuestionById)
+const mockedCreateQuestionDraft = vi.mocked(createQuestionDraft)
+const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedRejectQuestion = vi.mocked(rejectQuestion)
 const mockedArchiveQuestion = vi.mocked(archiveQuestion)
 const mockedReopenQuestion = vi.mocked(reopenQuestion)
@@ -54,6 +60,8 @@ describe('AdminQuestionDetailView', () => {
     routeQuery.estado = 'pendientes'
     routerPush.mockReset()
     mockedGetQuestionById.mockReset()
+    mockedCreateQuestionDraft.mockReset()
+    mockedDiscardQuestionDraft.mockReset()
     mockedRejectQuestion.mockReset()
     mockedArchiveQuestion.mockReset()
     mockedReopenQuestion.mockReset()
@@ -116,9 +124,77 @@ describe('AdminQuestionDetailView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('PENDIENTE')
+    expect(wrapper.text()).toContain('Crear borrador de publicación')
     expect(wrapper.text()).toContain('Archivar')
     expect(wrapper.text()).toContain('Rechazar')
     expect(wrapper.text()).not.toContain('Reabrir')
+  })
+
+  it('creates a draft and navigates to the admin post detail', async () => {
+    mockedGetQuestionById.mockResolvedValue(detail({ status: 'PENDING' }))
+    mockedCreateQuestionDraft.mockResolvedValue({
+      id: 9,
+      status: 'DRAFT',
+      title: '',
+      content: '',
+      sourceQuestionId: 1,
+      sourceQuestion: null,
+      section: baseDetail().section,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Crear borrador de publicación').trigger('click')
+    expect(wrapper.text()).toContain('¿Crear un borrador a partir de esta pregunta?')
+    await buttonByText(wrapper, 'Crear borrador').trigger('click')
+    await flushPromises()
+
+    expect(mockedCreateQuestionDraft).toHaveBeenCalledWith(1)
+    expect(routerPush).toHaveBeenCalledWith({ name: 'admin-post-detail', params: { id: 9 } })
+  })
+
+  it('shows linked draft actions and hides archive and reject', async () => {
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'PENDING',
+        linkedPost: { id: 9, status: 'DRAFT', title: '' },
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Borrador en preparación')
+    expect(wrapper.text()).toContain('Ver borrador')
+    expect(wrapper.text()).toContain('Descartar borrador')
+    expect(wrapper.text()).not.toContain('Archivar')
+    expect(wrapper.text()).not.toContain('Rechazar')
+  })
+
+  it('discards a linked draft and keeps the question pending', async () => {
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'PENDING',
+        linkedPost: { id: 9, status: 'DRAFT', title: '' },
+      }),
+    )
+    mockedDiscardQuestionDraft.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Descartar borrador').trigger('click')
+    expect(wrapper.text()).toContain('¿Descartar este borrador?')
+    await lastButtonByText(wrapper, 'Descartar borrador').trigger('click')
+    await flushPromises()
+
+    expect(mockedDiscardQuestionDraft).toHaveBeenCalledWith(1)
+    expect(wrapper.text()).toContain('El borrador fue descartado.')
+    expect(wrapper.text()).toContain('Archivar')
+    expect(wrapper.text()).toContain('Rechazar')
   })
 
   it('shows reopen action for archived questions', async () => {
@@ -275,6 +351,16 @@ function buttonByText(wrapper: ReturnType<typeof mountView>, text: string) {
   return button
 }
 
+function lastButtonByText(wrapper: ReturnType<typeof mountView>, text: string) {
+  const buttons = wrapper.findAll('button').filter((candidate) => candidate.text() === text)
+  const button = buttons[buttons.length - 1]
+  if (!button) {
+    throw new Error(`Button not found: ${text}`)
+  }
+
+  return button
+}
+
 function detail(overrides: Partial<AdminQuestionDetail> = {}): AdminQuestionDetail {
   return {
     ...baseDetail(),
@@ -298,6 +384,7 @@ function baseDetail(): AdminQuestionDetail {
       description: null,
     },
     attachment: null,
+    linkedPost: null,
   }
 }
 

@@ -127,7 +127,7 @@ describe('AdminQuestionsView', () => {
   it('renders pending questions with anonymous fallback and detail link preserving tab', async () => {
     mockedGetQuestionsByStatus.mockResolvedValue(
       response({
-        items: [summary({ id: 1, nickname: null, status: 'PENDING' })],
+        items: [summary({ id: 1, nickname: null, status: 'PENDING', hasLinkedPost: true })],
       }),
     )
 
@@ -136,6 +136,7 @@ describe('AdminQuestionsView', () => {
 
     expect(wrapper.text()).toContain('Anónimo')
     expect(wrapper.text()).toContain('PENDIENTE')
+    expect(wrapper.text()).toContain('Borrador en preparación')
     expect(wrapper.text()).toContain('Ver pregunta')
     const links = wrapper.findAllComponents(RouterLinkStub)
     expect(links[links.length - 1]?.props('to')).toEqual({
@@ -256,6 +257,7 @@ function baseSummary(): AdminQuestionSummary {
     status: 'PENDING',
     questionPreview: 'Pregunta enviada por estudiante',
     hasAttachment: false,
+    hasLinkedPost: false,
     createdAt: '2026-01-01T00:00:00Z',
   }
 }

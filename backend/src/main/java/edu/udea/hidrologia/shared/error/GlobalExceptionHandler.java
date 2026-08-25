@@ -15,6 +15,7 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
+import edu.udea.hidrologia.question.service.QuestionDraftConflictException;
 import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
 import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
@@ -69,9 +70,9 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
-    @ExceptionHandler(InvalidQuestionStatusTransitionException.class)
+    @ExceptionHandler({InvalidQuestionStatusTransitionException.class, QuestionDraftConflictException.class})
     ResponseEntity<ApiErrorResponse> handleInvalidQuestionStatusTransition(
-            InvalidQuestionStatusTransitionException exception,
+            RuntimeException exception,
             HttpServletRequest request) {
         HttpStatus status = HttpStatus.CONFLICT;
 

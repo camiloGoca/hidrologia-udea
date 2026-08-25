@@ -15,6 +15,7 @@ export interface AdminQuestionSummary {
   status: AdminQuestionStatus
   questionPreview: string
   hasAttachment: boolean
+  hasLinkedPost: boolean
   createdAt: string
 }
 
@@ -43,10 +44,17 @@ export interface AdminQuestionDetail {
   updatedAt: string
   section: AdminQuestionSection
   attachment: AdminQuestionAttachment | null
+  linkedPost: AdminLinkedPost | null
 }
 
 export interface AdminQuestionStatusUpdateResponse {
   id: number
   status: AdminQuestionStatus
   updatedAt: string
+}
+
+export interface AdminLinkedPost {
+  id: number
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+  title: string
 }

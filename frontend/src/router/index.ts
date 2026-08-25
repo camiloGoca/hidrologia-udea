@@ -10,6 +10,7 @@ import NotFoundView from '@/views/static/NotFoundView.vue'
 import PostDetailView from '@/views/posts/PostDetailView.vue'
 import AdminQuestionDetailView from '@/views/admin/AdminQuestionDetailView.vue'
 import AdminQuestionsView from '@/views/admin/AdminQuestionsView.vue'
+import AdminPostDraftView from '@/views/admin/AdminPostDraftView.vue'
 import AdminLoginView from '@/views/admin/AdminLoginView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
@@ -97,6 +98,11 @@ const router = createRouter({
           path: 'preguntas/:id',
           name: 'admin-question-detail',
           component: AdminQuestionDetailView,
+        },
+        {
+          path: 'publicaciones/:id',
+          name: 'admin-post-detail',
+          component: AdminPostDraftView,
         },
       ],
     },

@@ -4,6 +4,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,11 +28,15 @@ import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
+import edu.udea.hidrologia.post.dto.AdminPostResponse;
+import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.service.AdminPostService;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
+import edu.udea.hidrologia.question.service.AdminQuestionDraftService;
 import edu.udea.hidrologia.question.service.AdminQuestionService;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.section.entity.SectionType;
@@ -59,6 +64,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminQuestionService adminQuestionService;
+
+    @MockitoBean
+    private AdminQuestionDraftService adminQuestionDraftService;
+
+    @MockitoBean
+    private AdminPostService adminPostService;
 
     @MockitoBean
     private StudentQuestionRepository studentQuestionRepository;
@@ -307,6 +318,81 @@ class SecurityConfigTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/questions/1/reopen")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void protectsQuestionDraftEndpointsWithoutToken() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/questions/1/draft"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1/draft"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void protectsAdminPostDetailWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/posts/9"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnDraftEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/draft")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminPostEndpoint() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/posts/9")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAdminUidOnDraftAndAdminPostEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+        when(adminQuestionDraftService.createDraft(1L))
+                .thenReturn(new AdminPostResponse(
+                        9L,
+                        "",
+                        "",
+                        PostStatus.DRAFT,
+                        1L,
+                        null,
+                        null,
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        Instant.parse("2026-01-01T00:00:00Z")));
+        when(adminPostService.findAdminPostById(9L))
+                .thenReturn(new AdminPostResponse(
+                        9L,
+                        "",
+                        "",
+                        PostStatus.DRAFT,
+                        1L,
+                        null,
+                        null,
+                        Instant.parse("2026-01-01T00:00:00Z"),
+                        Instant.parse("2026-01-01T00:00:00Z")));
+
+        mockMvc.perform(post("/api/v1/admin/questions/1/draft")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1/draft")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/admin/posts/9")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
     }

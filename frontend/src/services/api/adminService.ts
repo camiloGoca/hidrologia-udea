@@ -1,6 +1,7 @@
 import { adminHttpClient } from './adminHttpClient'
 
 import type { AdminMeResponse } from '@/types/admin'
+import type { AdminPost } from '@/types/adminPost'
 import type {
   AdminQuestionStatus,
   AdminQuestionStatusUpdateResponse,
@@ -56,6 +57,22 @@ export async function reopenQuestion(id: number): Promise<AdminQuestionStatusUpd
   const response = await adminHttpClient.post<AdminQuestionStatusUpdateResponse>(
     `/admin/questions/${id}/reopen`,
   )
+
+  return response.data
+}
+
+export async function createQuestionDraft(questionId: number): Promise<AdminPost> {
+  const response = await adminHttpClient.post<AdminPost>(`/admin/questions/${questionId}/draft`)
+
+  return response.data
+}
+
+export async function discardQuestionDraft(questionId: number): Promise<void> {
+  await adminHttpClient.delete(`/admin/questions/${questionId}/draft`)
+}
+
+export async function getAdminPost(postId: number): Promise<AdminPost> {
+  const response = await adminHttpClient.get<AdminPost>(`/admin/posts/${postId}`)
 
   return response.data
 }

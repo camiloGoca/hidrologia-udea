@@ -2,6 +2,7 @@ package edu.udea.hidrologia.post.repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,6 +27,22 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     @EntityGraph(attributePaths = { "section", "tags" })
     Optional<Post> findByIdAndStatus(Long id, PostStatus status);
+
+    @EntityGraph(attributePaths = { "section", "sourceQuestion", "sourceQuestion.section", "sourceQuestion.attachment" })
+    @Query("""
+            select p
+            from Post p
+            where p.id = :id
+            """)
+    Optional<Post> findAdminById(@Param("id") Long id);
+
+    boolean existsBySourceQuestionId(Long sourceQuestionId);
+
+    @EntityGraph(attributePaths = { "sourceQuestion" })
+    Optional<Post> findBySourceQuestionId(Long sourceQuestionId);
+
+    @EntityGraph(attributePaths = { "sourceQuestion" })
+    List<Post> findBySourceQuestionIdIn(Set<Long> sourceQuestionIds);
 
     @EntityGraph(attributePaths = { "section", "tags" })
     @Query("""

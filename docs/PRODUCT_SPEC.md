@@ -303,6 +303,19 @@ La solución queda disponible públicamente.
 
 La pregunta original debe conservarse para mantener trazabilidad interna.
 
+Una pregunta de estudiante puede originar como máximo una publicación.
+
+Durante la preparación editorial, el profesor puede crear un borrador de publicación asociado a una pregunta pendiente. En ese estado:
+
+* la pregunta continúa en `PENDING`;
+* el borrador puede estar incompleto;
+* la pregunta no se considera publicada todavía;
+* archivar o rechazar la pregunta queda bloqueado mientras exista el borrador;
+* descartar el borrador elimina únicamente la publicación en borrador;
+* la pregunta y su imagen adjunta permanecen intactas.
+
+Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
+
 ---
 
 # 11. Panel administrativo

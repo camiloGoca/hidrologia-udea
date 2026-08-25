@@ -12,5 +12,6 @@ public record AdminQuestionDetailResponse(
         Instant createdAt,
         Instant updatedAt,
         AdminQuestionSectionResponse section,
-        AdminQuestionAttachmentResponse attachment) {
+        AdminQuestionAttachmentResponse attachment,
+        AdminLinkedPostResponse linkedPost) {
 }

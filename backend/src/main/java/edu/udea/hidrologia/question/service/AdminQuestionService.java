@@ -2,8 +2,12 @@ package edu.udea.hidrologia.question.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -13,10 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import edu.udea.hidrologia.question.dto.AdminQuestionAttachmentResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionDetailResponse;
+import edu.udea.hidrologia.question.dto.AdminLinkedPostResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSectionResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionSummaryResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
+import edu.udea.hidrologia.post.entity.Post;
+import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -37,10 +44,15 @@ public class AdminQuestionService {
             StudentQuestionStatus.REJECTED);
 
     private final StudentQuestionRepository studentQuestionRepository;
+    private final PostRepository postRepository;
     private final Clock clock;
 
-    public AdminQuestionService(StudentQuestionRepository studentQuestionRepository, Clock clock) {
+    public AdminQuestionService(
+            StudentQuestionRepository studentQuestionRepository,
+            PostRepository postRepository,
+            Clock clock) {
         this.studentQuestionRepository = studentQuestionRepository;
+        this.postRepository = postRepository;
         this.clock = clock;
     }
 
@@ -57,9 +69,12 @@ public class AdminQuestionService {
                 safeSize,
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
         Page<StudentQuestion> questionPage = studentQuestionRepository.findByStatus(status, pageRequest);
+        Map<Long, Post> linkedPostsByQuestionId = findLinkedPostsByQuestionId(questionPage.getContent());
 
         return new AdminQuestionsResponse(
-                questionPage.getContent().stream().map(this::toSummaryResponse).toList(),
+                questionPage.getContent().stream()
+                        .map(question -> toSummaryResponse(question, linkedPostsByQuestionId.containsKey(question.getId())))
+                        .toList(),
                 questionPage.getNumber(),
                 questionPage.getSize(),
                 questionPage.getTotalElements(),
@@ -75,8 +90,11 @@ public class AdminQuestionService {
     public AdminQuestionDetailResponse findQuestionById(Long id) {
         StudentQuestion question = studentQuestionRepository.findByIdWithSectionAndAttachment(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+        AdminLinkedPostResponse linkedPost = postRepository.findBySourceQuestionId(id)
+                .map(this::toLinkedPostResponse)
+                .orElse(null);
 
-        return toDetailResponse(question);
+        return toDetailResponse(question, linkedPost);
     }
 
     @Transactional
@@ -113,6 +131,11 @@ public class AdminQuestionService {
             throw new InvalidQuestionStatusTransitionException();
         }
 
+        if ((targetStatus == StudentQuestionStatus.REJECTED || targetStatus == StudentQuestionStatus.ARCHIVED)
+                && postRepository.existsBySourceQuestionId(question.getId())) {
+            throw new QuestionDraftConflictException("This question has a linked post draft");
+        }
+
         return updateStatus(question, targetStatus);
     }
 
@@ -137,7 +160,20 @@ public class AdminQuestionService {
         return Math.min(size, MAX_PAGE_SIZE);
     }
 
-    private AdminQuestionSummaryResponse toSummaryResponse(StudentQuestion question) {
+    private Map<Long, Post> findLinkedPostsByQuestionId(java.util.List<StudentQuestion> questions) {
+        Set<Long> questionIds = questions.stream()
+                .map(StudentQuestion::getId)
+                .collect(Collectors.toSet());
+
+        if (questionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return postRepository.findBySourceQuestionIdIn(questionIds).stream()
+                .collect(Collectors.toMap(post -> post.getSourceQuestion().getId(), Function.identity()));
+    }
+
+    private AdminQuestionSummaryResponse toSummaryResponse(StudentQuestion question, boolean hasLinkedPost) {
         return new AdminQuestionSummaryResponse(
                 question.getId(),
                 question.getNickname(),
@@ -145,10 +181,11 @@ public class AdminQuestionService {
                 question.getStatus(),
                 toPreview(question.getQuestion()),
                 question.getAttachment() != null,
+                hasLinkedPost,
                 question.getCreatedAt());
     }
 
-    private AdminQuestionDetailResponse toDetailResponse(StudentQuestion question) {
+    private AdminQuestionDetailResponse toDetailResponse(StudentQuestion question, AdminLinkedPostResponse linkedPost) {
         return new AdminQuestionDetailResponse(
                 question.getId(),
                 question.getNickname(),
@@ -157,7 +194,8 @@ public class AdminQuestionService {
                 question.getCreatedAt(),
                 question.getUpdatedAt(),
                 toSectionResponse(question.getSection()),
-                toAttachmentResponse(question.getAttachment()));
+                toAttachmentResponse(question.getAttachment()),
+                linkedPost);
     }
 
     private AdminQuestionSectionResponse toSectionResponse(Section section) {
@@ -180,6 +218,13 @@ public class AdminQuestionService {
                 attachment.getWidth(),
                 attachment.getHeight(),
                 attachment.getBytes());
+    }
+
+    private AdminLinkedPostResponse toLinkedPostResponse(Post post) {
+        return new AdminLinkedPostResponse(
+                post.getId(),
+                post.getStatus(),
+                post.getTitle());
     }
 
     private String toPreview(String question) {

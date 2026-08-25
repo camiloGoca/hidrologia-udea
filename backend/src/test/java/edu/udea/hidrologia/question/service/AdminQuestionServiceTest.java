@@ -2,7 +2,9 @@ package edu.udea.hidrologia.question.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +13,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import edu.udea.hidrologia.post.entity.Post;
+import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.dto.AdminQuestionDetailResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionStatusUpdateResponse;
 import edu.udea.hidrologia.question.dto.AdminQuestionsResponse;
@@ -43,12 +49,17 @@ class AdminQuestionServiceTest {
     @Mock
     private StudentQuestionRepository studentQuestionRepository;
 
+    @Mock
+    private PostRepository postRepository;
+
     private AdminQuestionService adminQuestionService;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(UPDATED_AT, ZoneOffset.UTC);
-        adminQuestionService = new AdminQuestionService(studentQuestionRepository, clock);
+        adminQuestionService = new AdminQuestionService(studentQuestionRepository, postRepository, clock);
+        lenient().when(postRepository.findBySourceQuestionIdIn(any())).thenReturn(List.of());
+        lenient().when(postRepository.findBySourceQuestionId(any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -88,7 +99,23 @@ class AdminQuestionServiceTest {
         assertThat(response.items().get(0).nickname()).isEqualTo("Goca");
         assertThat(response.items().get(0).status()).isEqualTo(StudentQuestionStatus.ARCHIVED);
         assertThat(response.items().get(0).hasAttachment()).isTrue();
+        assertThat(response.items().get(0).hasLinkedPost()).isFalse();
         assertThat(response.items().get(0).section().slug()).isEqualTo("taller-1");
+    }
+
+    @Test
+    void mapsLinkedPostsForQuestionSummariesWithSingleAdditionalQuery() {
+        StudentQuestion question = question(1L, "Goca", "Pregunta", StudentQuestionStatus.PENDING, NOW);
+        Post draft = draftPost(9L, question);
+        PageRequest pageRequest = pageRequest(0, 20);
+        when(studentQuestionRepository.findByStatus(StudentQuestionStatus.PENDING, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(question), pageRequest, 1));
+        when(postRepository.findBySourceQuestionIdIn(Set.of(1L))).thenReturn(List.of(draft));
+
+        AdminQuestionsResponse response = adminQuestionService.findPendingQuestions(0, 20);
+
+        assertThat(response.items().get(0).hasLinkedPost()).isTrue();
+        verify(postRepository).findBySourceQuestionIdIn(Set.of(1L));
     }
 
     @Test
@@ -197,6 +224,21 @@ class AdminQuestionServiceTest {
         assertThat(response.question()).isEqualTo("Pregunta completa");
         assertThat(response.status()).isEqualTo(StudentQuestionStatus.PUBLISHED);
         assertThat(response.attachment()).isNull();
+        assertThat(response.linkedPost()).isNull();
+    }
+
+    @Test
+    void returnsDetailWithLinkedPostSummary() {
+        StudentQuestion question = question(1L, "Goca", "Pregunta completa", StudentQuestionStatus.PENDING, NOW);
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+        when(postRepository.findBySourceQuestionId(1L)).thenReturn(Optional.of(draftPost(9L, question)));
+
+        AdminQuestionDetailResponse response = adminQuestionService.findQuestionById(1L);
+
+        assertThat(response.linkedPost()).isNotNull();
+        assertThat(response.linkedPost().id()).isEqualTo(9L);
+        assertThat(response.linkedPost().status()).isEqualTo(PostStatus.DRAFT);
+        assertThat(response.linkedPost().title()).isEmpty();
     }
 
     @Test
@@ -246,6 +288,18 @@ class AdminQuestionServiceTest {
 
         assertThat(response.status()).isEqualTo(StudentQuestionStatus.ARCHIVED);
         assertThat(question.getAttachment()).isNotNull();
+    }
+
+    @Test
+    void blocksRejectAndArchiveWhenPendingQuestionHasLinkedPost() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.PENDING, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(postRepository.existsBySourceQuestionId(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> adminQuestionService.rejectQuestion(1L))
+                .isInstanceOf(QuestionDraftConflictException.class);
+        assertThatThrownBy(() -> adminQuestionService.archiveQuestion(1L))
+                .isInstanceOf(QuestionDraftConflictException.class);
     }
 
     @Test
@@ -346,6 +400,20 @@ class AdminQuestionServiceTest {
                 status,
                 createdAt,
                 createdAt.plusSeconds(30));
+    }
+
+    private Post draftPost(Long id, StudentQuestion question) {
+        return new Post(
+                id,
+                question.getSection(),
+                "",
+                "",
+                PostStatus.DRAFT,
+                NOW,
+                NOW,
+                null,
+                Set.of(),
+                question);
     }
 
     private Section section() {

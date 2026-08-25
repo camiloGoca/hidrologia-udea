@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 import edu.udea.hidrologia.section.entity.Section;
+import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.tag.entity.Tag;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,6 +19,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -51,6 +53,10 @@ public class Post {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_question_id", unique = true)
+    private StudentQuestion sourceQuestion;
+
     @ManyToMany
     @JoinTable(
             name = "post_tags",
@@ -71,6 +77,21 @@ public class Post {
             Instant updatedAt,
             Instant publishedAt,
             Set<Tag> tags) {
+        this(id, section, title, content, status, createdAt, updatedAt, publishedAt, tags, null);
+    }
+
+    public Post(
+            Long id,
+            Section section,
+            String title,
+            String content,
+            PostStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant publishedAt,
+            Set<Tag> tags,
+            StudentQuestion sourceQuestion) {
+        validateEditorialContent(title, content, status);
         this.id = id;
         this.section = section;
         this.title = title;
@@ -80,6 +101,21 @@ public class Post {
         this.updatedAt = updatedAt;
         this.publishedAt = publishedAt;
         this.tags = tags == null ? new LinkedHashSet<>() : new LinkedHashSet<>(tags);
+        this.sourceQuestion = sourceQuestion;
+    }
+
+    public static Post createQuestionDraft(StudentQuestion question, Instant now) {
+        return new Post(
+                null,
+                question.getSection(),
+                "",
+                "",
+                PostStatus.DRAFT,
+                now,
+                now,
+                null,
+                new LinkedHashSet<>(),
+                question);
     }
 
     public Long getId() {
@@ -114,7 +150,25 @@ public class Post {
         return publishedAt;
     }
 
+    public StudentQuestion getSourceQuestion() {
+        return sourceQuestion;
+    }
+
     public Set<Tag> getTags() {
         return tags;
+    }
+
+    private void validateEditorialContent(String title, String content, PostStatus status) {
+        if (status != PostStatus.DRAFT && isBlank(title)) {
+            throw new IllegalArgumentException("Post title is required outside draft status");
+        }
+
+        if (status != PostStatus.DRAFT && isBlank(content)) {
+            throw new IllegalArgumentException("Post content is required outside draft status");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
