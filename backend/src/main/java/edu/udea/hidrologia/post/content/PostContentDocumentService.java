@@ -25,10 +25,23 @@ public class PostContentDocumentService {
             "bulletList",
             "orderedList",
             "listItem",
-            "blockquote");
+            "blockquote",
+            "academicBlock");
     private static final Set<String> INLINE_NODES = Set.of("text", "hardBreak");
-    private static final Set<String> MARKS = Set.of("bold", "italic", "underline", "link");
+    private static final Set<String> MARKS = Set.of(
+            "bold",
+            "italic",
+            "underline",
+            "link",
+            "textSize",
+            "textColor",
+            "highlight");
     private static final Set<String> LINK_PROTOCOLS = Set.of("http", "https", "mailto");
+    private static final Set<String> TEXT_ALIGNMENTS = Set.of("left", "center", "right", "justify");
+    private static final Set<String> TEXT_SIZES = Set.of("small", "normal", "large");
+    private static final Set<String> TEXT_COLORS = Set.of("default", "institutional", "blue", "muted", "danger");
+    private static final Set<String> HIGHLIGHT_KINDS = Set.of("note", "important");
+    private static final Set<String> ACADEMIC_BLOCK_KINDS = Set.of("note", "example", "important");
 
     private final JsonMapper jsonMapper;
 
@@ -169,9 +182,15 @@ public class PostContentDocumentService {
         if ("heading".equals(type)) {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateHeadingAttrs(node.get("attrs"));
+        } else if ("paragraph".equals(type)) {
+            validateOnlyFields(node, Set.of("type", "attrs", "content"));
+            validateTextBlockAttrs(node.get("attrs"));
         } else if ("orderedList".equals(type)) {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateOrderedListAttrs(node.get("attrs"));
+        } else if ("academicBlock".equals(type)) {
+            validateOnlyFields(node, Set.of("type", "attrs", "content"));
+            validateAcademicBlockAttrs(node.get("attrs"));
         } else {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateNoAttrs(node.get("attrs"));
@@ -210,12 +229,29 @@ public class PostContentDocumentService {
             if (!MARKS.contains(type)) {
                 throw invalid();
             }
-            if ("link".equals(type)) {
+            validateMark(mark, type);
+        }
+    }
+
+    private void validateMark(JsonNode mark, String type) {
+        switch (type) {
+            case "link" -> {
                 validateOnlyFields(mark, Set.of("type", "attrs"));
                 validateLinkAttrs(mark.get("attrs"));
-            } else {
-                validateOnlyFields(mark, Set.of("type"));
             }
+            case "textSize" -> {
+                validateOnlyFields(mark, Set.of("type", "attrs"));
+                validateRequiredTokenAttr(mark.get("attrs"), "size", TEXT_SIZES);
+            }
+            case "textColor" -> {
+                validateOnlyFields(mark, Set.of("type", "attrs"));
+                validateRequiredTokenAttr(mark.get("attrs"), "color", TEXT_COLORS);
+            }
+            case "highlight" -> {
+                validateOnlyFields(mark, Set.of("type", "attrs"));
+                validateRequiredTokenAttr(mark.get("attrs"), "kind", HIGHLIGHT_KINDS);
+            }
+            default -> validateOnlyFields(mark, Set.of("type"));
         }
     }
 
@@ -223,7 +259,7 @@ public class PostContentDocumentService {
         if (attrs == null || !attrs.isObject()) {
             throw invalid();
         }
-        validateOnlyFields(attrs, Set.of("level"));
+        validateOnlyFields(attrs, Set.of("level", "textAlign"));
         JsonNode level = attrs.get("level");
         if (level == null || !level.isIntegralNumber()) {
             throw invalid();
@@ -232,6 +268,18 @@ public class PostContentDocumentService {
         if (value < 2 || value > 3) {
             throw invalid();
         }
+        validateOptionalToken(attrs.get("textAlign"), TEXT_ALIGNMENTS);
+    }
+
+    private void validateTextBlockAttrs(JsonNode attrs) {
+        if (attrs == null) {
+            return;
+        }
+        if (!attrs.isObject()) {
+            throw invalid();
+        }
+        validateOnlyFields(attrs, Set.of("textAlign"));
+        validateOptionalToken(attrs.get("textAlign"), TEXT_ALIGNMENTS);
     }
 
     private void validateOrderedListAttrs(JsonNode attrs) {
@@ -252,6 +300,10 @@ public class PostContentDocumentService {
         }
     }
 
+    private void validateAcademicBlockAttrs(JsonNode attrs) {
+        validateRequiredTokenAttr(attrs, "kind", ACADEMIC_BLOCK_KINDS);
+    }
+
     private void validateLinkAttrs(JsonNode attrs) {
         if (attrs == null || !attrs.isObject()) {
             throw invalid();
@@ -270,6 +322,30 @@ public class PostContentDocumentService {
         if (!attrs.isObject() || attrs.size() > 0) {
             throw invalid();
         }
+    }
+
+    private void validateRequiredTokenAttr(JsonNode attrs, String field, Set<String> allowedValues) {
+        if (attrs == null || !attrs.isObject()) {
+            throw invalid();
+        }
+        validateOnlyFields(attrs, Set.of(field));
+        JsonNode value = attrs.get(field);
+        if (!isAllowedToken(value, allowedValues)) {
+            throw invalid();
+        }
+    }
+
+    private void validateOptionalToken(JsonNode value, Set<String> allowedValues) {
+        if (value == null || value.isNull()) {
+            return;
+        }
+        if (!isAllowedToken(value, allowedValues)) {
+            throw invalid();
+        }
+    }
+
+    private boolean isAllowedToken(JsonNode value, Set<String> allowedValues) {
+        return value != null && value.isTextual() && allowedValues.contains(value.asText());
     }
 
     private void validateOnlyFields(JsonNode node, Set<String> allowedFields) {
@@ -304,6 +380,13 @@ public class PostContentDocumentService {
 
         if ("blockquote".equals(parentType) || "listItem".equals(parentType)) {
             if (!BLOCK_NODES.contains(type) || "listItem".equals(type)) {
+                throw invalid();
+            }
+            return;
+        }
+
+        if ("academicBlock".equals(parentType)) {
+            if (!BLOCK_NODES.contains(type) || "listItem".equals(type) || "academicBlock".equals(type)) {
                 throw invalid();
             }
             return;
@@ -390,6 +473,14 @@ public class PostContentDocumentService {
         if ("heading".equals(type)) {
             ObjectNode result = JsonNodeFactory.instance.objectNode();
             result.put("level", attrs.get("level").intValue());
+            appendTextAlign(result, attrs);
+
+            return result;
+        }
+
+        if ("paragraph".equals(type) && hasTextAlign(attrs)) {
+            ObjectNode result = JsonNodeFactory.instance.objectNode();
+            appendTextAlign(result, attrs);
 
             return result;
         }
@@ -412,7 +503,27 @@ public class PostContentDocumentService {
             return result;
         }
 
+        if ("academicBlock".equals(type)) {
+            ObjectNode result = JsonNodeFactory.instance.objectNode();
+            result.put("kind", attrs.get("kind").asText());
+
+            return result;
+        }
+
         return null;
+    }
+
+    private void appendTextAlign(ObjectNode result, JsonNode attrs) {
+        JsonNode textAlign = attrs.get("textAlign");
+        if (textAlign != null && !textAlign.isNull()) {
+            result.put("textAlign", textAlign.asText());
+        }
+    }
+
+    private boolean hasTextAlign(JsonNode attrs) {
+        JsonNode textAlign = attrs == null ? null : attrs.get("textAlign");
+
+        return textAlign != null && !textAlign.isNull();
     }
 
     private JsonNode canonicalizeMarks(JsonNode marks) {
@@ -428,6 +539,18 @@ public class PostContentDocumentService {
             if ("link".equals(type)) {
                 ObjectNode attrs = JsonNodeFactory.instance.objectNode();
                 attrs.put("href", mark.get("attrs").get("href").asText());
+                canonicalMark.set("attrs", attrs);
+            } else if ("textSize".equals(type)) {
+                ObjectNode attrs = JsonNodeFactory.instance.objectNode();
+                attrs.put("size", mark.get("attrs").get("size").asText());
+                canonicalMark.set("attrs", attrs);
+            } else if ("textColor".equals(type)) {
+                ObjectNode attrs = JsonNodeFactory.instance.objectNode();
+                attrs.put("color", mark.get("attrs").get("color").asText());
+                canonicalMark.set("attrs", attrs);
+            } else if ("highlight".equals(type)) {
+                ObjectNode attrs = JsonNodeFactory.instance.objectNode();
+                attrs.put("kind", mark.get("attrs").get("kind").asText());
                 canonicalMark.set("attrs", attrs);
             }
             result.add(canonicalMark);

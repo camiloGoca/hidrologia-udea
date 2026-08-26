@@ -1,9 +1,10 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { Editor } from '@tiptap/core'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AcademicPostEditor from '@/components/AcademicPostEditor.vue'
-import type { PostContentDocument } from '@/types/postContent'
+import type { PostContentDocument, PostContentMark } from '@/types/postContent'
 import { emptyPostContentDocument } from '@/types/postContent'
 import { createAcademicPostEditorExtensions } from '@/utils/academicPostEditorExtensions'
 
@@ -12,7 +13,7 @@ describe('AcademicPostEditor', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the EP1 toolbar controls', () => {
+  it('renders the EP2 toolbar controls grouped for academic editing', () => {
     const wrapper = mount(AcademicPostEditor, {
       props: {
         id: 'post-content',
@@ -20,15 +21,24 @@ describe('AcademicPostEditor', () => {
       },
     })
 
-    expect(wrapper.find('[aria-label="Herramientas del editor"]').exists()).toBe(true)
+    const toolbar = wrapper.get('[aria-label^="Herramientas del editor"]')
+
+    expect(toolbar.classes()).toContain('editor-toolbar')
+    expect(wrapper.text()).toContain('Bloque')
     expect(wrapper.text()).toContain('Párrafo')
-    expect(wrapper.text()).toContain('Subtítulo')
+    expect(wrapper.text()).toContain('Subtítulo principal')
+    expect(wrapper.text()).toContain('Subtítulo secundario')
     expect(wrapper.text()).toContain('Negrita')
     expect(wrapper.text()).toContain('Cursiva')
     expect(wrapper.text()).toContain('Subrayado')
+    expect(wrapper.text()).toContain('Tamaño')
+    expect(wrapper.text()).toContain('Color')
+    expect(wrapper.text()).toContain('Resaltado')
     expect(wrapper.text()).toContain('Lista con viñetas')
     expect(wrapper.text()).toContain('Lista numerada')
     expect(wrapper.text()).toContain('Cita')
+    expect(wrapper.text()).toContain('Bloque académico')
+    expect(wrapper.text()).toContain('Alineación')
     expect(wrapper.text()).toContain('Enlace')
     expect(wrapper.text()).toContain('Deshacer')
     expect(wrapper.text()).toContain('Rehacer')
@@ -47,6 +57,19 @@ describe('AcademicPostEditor', () => {
     )
 
     editor.destroy()
+  })
+
+  it('defines sticky toolbar and editor-only link/highlight presentation styles', () => {
+    const source = readFileSync('src/components/AcademicPostEditor.vue', 'utf-8')
+
+    expect(source).toContain('.editor-toolbar')
+    expect(source).toContain('position: sticky')
+    expect(source).toContain('top: 1rem')
+    expect(source).toContain('z-index: 20')
+    expect(source).toContain(':deep(.ProseMirror a[href])')
+    expect(source).toContain('text-decoration-line: underline')
+    expect(source).toContain('cursor: text')
+    expect(source).toContain('color: inherit')
   })
 
   it('creates the Tiptap link JSON shape expected by the backend normalizer', () => {
@@ -69,6 +92,9 @@ describe('AcademicPostEditor', () => {
       content: [
         {
           type: 'paragraph',
+          attrs: {
+            textAlign: null,
+          },
           content: [
             {
               type: 'text',
@@ -92,6 +118,143 @@ describe('AcademicPostEditor', () => {
     })
 
     editor.destroy()
+  })
+
+  it('creates controlled EP2 text marks and alignment tokens', () => {
+    const editor = createEditor(textDocument())
+
+    selectText(editor, 'no debe')
+    editor.commands.setAcademicTextSize('large')
+    editor.commands.setAcademicTextColor('blue')
+    editor.commands.setAcademicTextHighlight('note')
+    editor.commands.setAcademicTextAlign('center')
+
+    expect(editor.getJSON()).toMatchObject({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { textAlign: 'center' },
+          content: [
+            { type: 'text', text: 'Este texto ' },
+            {
+              type: 'text',
+              text: 'no debe',
+              marks: [
+                { type: 'textSize', attrs: { size: 'large' } },
+                { type: 'textColor', attrs: { color: 'blue' } },
+                { type: 'highlight', attrs: { kind: 'note' } },
+              ],
+            },
+            { type: 'text', text: ' desaparecer' },
+          ],
+        },
+      ],
+    })
+
+    editor.destroy()
+  })
+
+  it('keeps text color when highlight is applied later', () => {
+    const editor = createEditor(textDocument())
+
+    selectText(editor, 'no debe')
+    editor.commands.setAcademicTextColor('institutional')
+    editor.commands.setAcademicTextHighlight('important')
+
+    expect(selectedTextMarks(editor)).toEqual([
+      { type: 'textColor', attrs: { color: 'institutional' } },
+      { type: 'highlight', attrs: { kind: 'important' } },
+    ])
+
+    editor.destroy()
+  })
+
+  it('reloads content preserving combined color and highlight marks', async () => {
+    const wrapper = mount(AcademicPostEditor, {
+      props: {
+        id: 'post-content',
+        modelValue: emptyPostContentDocument(),
+      },
+    })
+    const document = styledTextDocument()
+
+    await wrapper.setProps({ modelValue: document })
+    await flushPromises()
+
+    expect(getWrapperEditor(wrapper.vm)?.getJSON()).toMatchObject(document)
+
+    wrapper.unmount()
+  })
+
+  it('wraps selected content in a controlled academic block', () => {
+    const editor = createEditor(textDocument())
+
+    selectText(editor, 'no debe')
+    editor.commands.setAcademicBlock('example')
+
+    expect(editor.getJSON().content?.[0]).toMatchObject({
+      type: 'academicBlock',
+      attrs: { kind: 'example' },
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Este texto no debe desaparecer' }],
+        },
+      ],
+    })
+
+    editor.destroy()
+  })
+
+  it('opens an accessible link form instead of using a browser prompt', async () => {
+    const prompt = vi.spyOn(window, 'prompt')
+    const wrapper = mount(AcademicPostEditor, {
+      props: {
+        id: 'post-content',
+        modelValue: textDocument('UdeA'),
+      },
+    })
+    const editor = getWrapperEditor(wrapper.vm)
+
+    expect(editor).not.toBeNull()
+
+    if (!editor) {
+      throw new Error('AcademicPostEditor did not expose the Tiptap editor in this test.')
+    }
+
+    const component = wrapper.vm as unknown as { openLinkForm: () => Promise<void> }
+    expect(wrapper.find('button[title="Agregar o editar enlace"]').exists()).toBe(true)
+
+    editor.commands.setTextSelection({ from: 1, to: 5 })
+    await component.openLinkForm()
+    await flushPromises()
+    await wrapper.get('#post-content-link').setValue('https://www.udea.edu.co')
+    await wrapper.get('[aria-label="Editar enlace"] button').trigger('click')
+
+    expect(prompt).not.toHaveBeenCalled()
+    expect(editor.getJSON()).toMatchObject({
+      type: 'doc',
+      content: [
+        {
+          content: [
+            {
+              marks: [
+                {
+                  type: 'link',
+                  attrs: {
+                    href: 'https://www.udea.edu.co',
+                  },
+                },
+              ],
+              text: 'UdeA',
+            },
+          ],
+        },
+      ],
+    })
+
+    wrapper.unmount()
   })
 
   it('does not mutate or emit content updates when text is selected', () => {
@@ -284,6 +447,35 @@ function textDocument(text = 'Este texto no debe desaparecer'): PostContentDocum
       },
     ],
   }
+}
+
+function styledTextDocument(): PostContentDocument {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'Texto importante',
+            marks: [
+              { type: 'textColor', attrs: { color: 'institutional' } },
+              { type: 'highlight', attrs: { kind: 'important' } },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+}
+
+function selectedTextMarks(editor: Editor): PostContentMark[] {
+  const content = (editor.getJSON() as PostContentDocument).content ?? []
+  const paragraph = content[0]
+  const textNode = paragraph?.content?.find((node) => node.text === 'no debe')
+
+  return textNode?.marks ?? []
 }
 
 function pressEnterOnSelection(content: PostContentDocument) {

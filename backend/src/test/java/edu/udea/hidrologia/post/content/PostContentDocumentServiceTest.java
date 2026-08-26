@@ -150,6 +150,206 @@ class PostContentDocumentServiceTest {
     }
 
     @Test
+    void acceptsH2AndH3HeadingsButRejectsH1() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 2 },
+                      "content": [{ "type": "text", "text": "Subtitulo principal" }]
+                    },
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 3 },
+                      "content": [{ "type": "text", "text": "Subtitulo secundario" }]
+                    }
+                  ]
+                }
+                """);
+        Map<String, Object> h1Document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 1 },
+                      "content": [{ "type": "text", "text": "Titulo interno" }]
+                    }
+                  ]
+                }
+                """);
+
+        assertThat(service.extractPlainText(document))
+                .contains("Subtitulo principal")
+                .contains("Subtitulo secundario");
+        assertThatThrownBy(() -> service.validate(h1Document))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    void acceptsControlledTextSizesAndRejectsArbitrarySizes() throws Exception {
+        Map<String, Object> document = documentWithMark("""
+                { "type": "textSize", "attrs": { "size": "large" } }
+                """);
+        Map<String, Object> invalidDocument = documentWithMark("""
+                { "type": "textSize", "attrs": { "size": "27px" } }
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+
+        assertThat(markAttrs(validated)).containsOnly(Map.entry("size", "large"));
+        assertThatThrownBy(() -> service.validate(invalidDocument))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    void acceptsControlledTextColorsAndRejectsArbitraryColors() throws Exception {
+        Map<String, Object> document = documentWithMark("""
+                { "type": "textColor", "attrs": { "color": "institutional" } }
+                """);
+        Map<String, Object> invalidDocument = documentWithMark("""
+                { "type": "textColor", "attrs": { "color": "#00ff00" } }
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+
+        assertThat(markAttrs(validated)).containsOnly(Map.entry("color", "institutional"));
+        assertThatThrownBy(() -> service.validate(invalidDocument))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptsControlledAlignmentAndRejectsUnknownAlignment() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "textAlign": "justify" },
+                      "content": [{ "type": "text", "text": "Texto justificado" }]
+                    }
+                  ]
+                }
+                """);
+        Map<String, Object> invalidDocument = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "textAlign": "diagonal" },
+                      "content": [{ "type": "text", "text": "Texto" }]
+                    }
+                  ]
+                }
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+
+        assertThat((Map<String, Object>) content.get(0).get("attrs"))
+                .containsOnly(Map.entry("textAlign", "justify"));
+        assertThatThrownBy(() -> service.validate(invalidDocument))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    void acceptsControlledHighlightAndRejectsArbitraryHighlight() throws Exception {
+        Map<String, Object> document = documentWithMark("""
+                { "type": "highlight", "attrs": { "kind": "important" } }
+                """);
+        Map<String, Object> invalidDocument = documentWithMark("""
+                { "type": "highlight", "attrs": { "kind": "rainbow" } }
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+
+        assertThat(markAttrs(validated)).containsOnly(Map.entry("kind", "important"));
+        assertThatThrownBy(() -> service.validate(invalidDocument))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptsAcademicBlocksAndRejectsUnknownKinds() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "academicBlock",
+                      "attrs": { "kind": "example" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "content": [{ "type": "text", "text": "Ejemplo resuelto" }]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+        Map<String, Object> invalidDocument = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "academicBlock",
+                      "attrs": { "kind": "warning" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "content": [{ "type": "text", "text": "Texto" }]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+
+        assertThat((Map<String, Object>) content.get(0).get("attrs"))
+                .containsOnly(Map.entry("kind", "example"));
+        assertThat(service.extractPlainText(document)).isEqualTo("Ejemplo resuelto");
+        assertThatThrownBy(() -> service.validate(invalidDocument))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
+    void extractorIgnoresControlledStyles() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "textAlign": "center" },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Texto con estilo",
+                          "marks": [
+                            { "type": "textSize", "attrs": { "size": "small" } },
+                            { "type": "textColor", "attrs": { "color": "blue" } },
+                            { "type": "highlight", "attrs": { "kind": "note" } }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+        assertThat(service.extractPlainText(document)).isEqualTo("Texto con estilo");
+    }
+
+    @Test
     void rejectsUnknownNodes() throws Exception {
         Map<String, Object> document = json("""
                 {
@@ -262,8 +462,33 @@ class PostContentDocumentServiceTest {
                 """.formatted(href));
     }
 
+    private Map<String, Object> documentWithMark(String mark) throws Exception {
+        return json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Texto",
+                          "marks": [%s]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """.formatted(mark));
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> linkAttrs(Map<String, Object> document) {
+        return markAttrs(document);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> markAttrs(Map<String, Object> document) {
         List<Map<String, Object>> content = (List<Map<String, Object>>) document.get("content");
         List<Map<String, Object>> paragraphContent = (List<Map<String, Object>>) content.get(0).get("content");
         List<Map<String, Object>> marks = (List<Map<String, Object>>) paragraphContent.get(0).get("marks");

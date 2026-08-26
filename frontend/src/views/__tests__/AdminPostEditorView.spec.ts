@@ -125,6 +125,15 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).toContain('#Morfometría')
   })
 
+  it('keeps the editor card from clipping the sticky toolbar', async () => {
+    mockedGetAdminPost.mockResolvedValue(adminPost())
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.get('article').classes()).not.toContain('overflow-hidden')
+  })
+
   it('tracks dirty state and saves a draft manually', async () => {
     mockedGetAdminPost.mockResolvedValue(adminPost())
     mockedUpdateAdminPost.mockResolvedValue(

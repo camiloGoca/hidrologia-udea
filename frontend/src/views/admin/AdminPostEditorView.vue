@@ -382,7 +382,7 @@ function sameIds(left: number[], right: number[]) {
         </p>
       </div>
 
-      <article v-else class="mt-8 overflow-hidden rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-200">
+      <article v-else class="mt-8 rounded-[2rem] bg-white shadow-sm ring-1 ring-slate-200">
         <header class="border-b border-slate-200 p-6 sm:p-8">
           <div class="flex flex-wrap items-center gap-2 text-xs font-black uppercase">
             <span class="rounded-full bg-sky-100 px-3 py-1 text-sky-950">

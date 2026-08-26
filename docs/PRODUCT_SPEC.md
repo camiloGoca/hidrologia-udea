@@ -367,12 +367,22 @@ Implementado en la fase Editor Académico EP1:
 * el texto plano se mantiene derivado del documento para compatibilidad, validación y búsqueda futura;
 * el render público interpreta únicamente nodos y marcas permitidas, sin ejecutar HTML enviado por usuarios.
 
+Implementado en la fase Editor Académico EP2:
+
+* el editor ofrece una barra de herramientas más clara para contenido académico;
+* la barra de herramientas permanece visible al editar publicaciones largas;
+* se agregan tamaños, colores, alineación y resaltados mediante tokens controlados;
+* se agregan bloques académicos de nota, ejemplo e importante;
+* los enlaces se distinguen visualmente dentro del editor;
+* el backend continúa validando y normalizando el documento estructurado;
+* el render público traduce únicamente tokens conocidos a estilos seguros, sin HTML ni CSS libre.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
 
 * búsqueda avanzada o autocompletado de hashtags;
-* colores, tamaños controlados y alineación en el editor académico;
+* vista previa del contenido antes de publicar;
 * redirects si alguna vez se permite cambiar slugs;
 * imágenes propias de Posts;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;

@@ -1,8 +1,44 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue'
 
-import type { PostContentDocument, PostContentMark, PostContentNode } from '@/types/postContent'
+import type {
+  PostContentAcademicBlockKind,
+  PostContentDocument,
+  PostContentHighlightKind,
+  PostContentMark,
+  PostContentNode,
+  PostContentTextAlign,
+  PostContentTextColor,
+  PostContentTextSize,
+} from '@/types/postContent'
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
+const TEXT_ALIGN_CLASSES: Record<PostContentTextAlign, string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+  justify: 'text-justify',
+}
+const TEXT_SIZE_CLASSES: Record<PostContentTextSize, string> = {
+  small: 'text-base',
+  normal: 'text-lg',
+  large: 'text-xl',
+}
+const TEXT_COLOR_CLASSES: Record<PostContentTextColor, string> = {
+  default: 'text-slate-800',
+  institutional: 'text-emerald-800',
+  blue: 'text-sky-800',
+  muted: 'text-slate-600',
+  danger: 'text-red-700',
+}
+const HIGHLIGHT_CLASSES: Record<PostContentHighlightKind, string> = {
+  note: 'rounded-md bg-amber-100 px-1 py-0.5 text-slate-950',
+  important: 'rounded-md bg-red-100 px-1 py-0.5 text-red-950',
+}
+const ACADEMIC_BLOCK_CLASSES: Record<PostContentAcademicBlockKind, string> = {
+  note: 'border-emerald-200 bg-emerald-50 text-emerald-950',
+  example: 'border-sky-200 bg-sky-50 text-sky-950',
+  important: 'border-orange-200 bg-orange-50 text-orange-950',
+}
 
 export default defineComponent({
   name: 'PostContentRenderer',
@@ -38,9 +74,9 @@ function renderNode(node: PostContentNode, index: number): VNode | null {
 
   switch (node.type) {
     case 'paragraph':
-      return h('p', { key }, children.length ? children : '\u00a0')
+      return h('p', { key, class: textAlignClass(node) }, children.length ? children : '\u00a0')
     case 'heading':
-      return h(headingTag(node), { key, class: 'font-black leading-tight text-sky-950' }, children)
+      return h(headingTag(node), { key, class: headingClass(node) }, children)
     case 'bulletList':
       return h('ul', { key, class: 'list-disc space-y-2 pl-6' }, children)
     case 'orderedList':
@@ -56,6 +92,8 @@ function renderNode(node: PostContentNode, index: number): VNode | null {
         },
         children,
       )
+    case 'academicBlock':
+      return renderAcademicBlock(node, key, children)
     case 'text':
       return renderText(node, key)
     case 'hardBreak':
@@ -63,6 +101,25 @@ function renderNode(node: PostContentNode, index: number): VNode | null {
     default:
       return null
   }
+}
+
+function renderAcademicBlock(node: PostContentNode, key: string, children: VNode[]): VNode {
+  const kind = node.attrs?.kind ?? 'note'
+
+  return h(
+    'section',
+    {
+      key,
+      class: [
+        'rounded-2xl border px-5 py-4 shadow-sm',
+        ACADEMIC_BLOCK_CLASSES[kind] ?? ACADEMIC_BLOCK_CLASSES.note,
+      ],
+    },
+    [
+      h('p', { class: 'mb-2 text-xs font-black uppercase text-current' }, academicBlockLabel(kind)),
+      ...children,
+    ],
+  )
 }
 
 function renderText(node: PostContentNode, key: string): VNode {
@@ -82,6 +139,12 @@ function renderMark(mark: PostContentMark, child: VNode): VNode {
       return h('u', {}, [child])
     case 'link':
       return renderLink(mark, child)
+    case 'textSize':
+      return h('span', { class: textSizeClass(mark) }, [child])
+    case 'textColor':
+      return h('span', { class: textColorClass(mark) }, [child])
+    case 'highlight':
+      return h('mark', { class: highlightClass(mark) }, [child])
     default:
       return child
   }
@@ -110,6 +173,42 @@ function renderLink(mark: PostContentMark, child: VNode): VNode {
 
 function headingTag(node: PostContentNode): 'h2' | 'h3' {
   return node.attrs?.level === 3 ? 'h3' : 'h2'
+}
+
+function headingClass(node: PostContentNode): string[] {
+  const base =
+    node.attrs?.level === 3
+      ? 'text-2xl font-black leading-tight text-emerald-900'
+      : 'text-3xl font-black leading-tight text-sky-950'
+
+  return [base, textAlignClass(node)]
+}
+
+function textAlignClass(node: PostContentNode): string {
+  return TEXT_ALIGN_CLASSES[node.attrs?.textAlign ?? 'left']
+}
+
+function textSizeClass(mark: PostContentMark): string {
+  return TEXT_SIZE_CLASSES[mark.attrs?.size ?? 'normal']
+}
+
+function textColorClass(mark: PostContentMark): string {
+  return TEXT_COLOR_CLASSES[mark.attrs?.color ?? 'default']
+}
+
+function highlightClass(mark: PostContentMark): string {
+  return HIGHLIGHT_CLASSES[mark.attrs?.kind ?? 'note']
+}
+
+function academicBlockLabel(kind: PostContentAcademicBlockKind): string {
+  switch (kind) {
+    case 'example':
+      return 'Ejemplo'
+    case 'important':
+      return 'Importante'
+    case 'note':
+      return 'Nota'
+  }
 }
 
 function isSafeLink(href: string): boolean {

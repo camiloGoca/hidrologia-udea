@@ -447,7 +447,9 @@ En Admin Publications V2 el profesor puede crear Posts `DRAFT` manualmente desde
 
 En Editor Académico EP1 el editor administrativo envía `contentDocument`; el backend valida el documento con una whitelist de nodos y marcas permitidas, extrae `content` como texto plano derivado y guarda ambos campos en la misma operación transaccional. Los endpoints públicos exponen el documento estructurado para un renderer propio de Vue que no usa `v-html` ni ejecuta HTML libre.
 
-Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, colores/tamaños/alineación en el editor, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
+En Editor Académico EP2 el documento estructurado admite estilos semánticos controlados mediante tokens: tamaños (`small`, `normal`, `large`), colores (`default`, `institutional`, `blue`, `muted`, `danger`), alineación (`left`, `center`, `right`, `justify`), resaltados (`note`, `important`) y bloques académicos (`note`, `example`, `important`). La barra de herramientas del editor es sticky respecto al scroll principal para facilitar publicaciones largas, y los enlaces tienen presentación visual propia durante la edición sin cambiar su representación canónica. El backend rechaza atributos desconocidos, colores libres, tamaños libres, clases arbitrarias y estilos CSS enviados por el cliente. El renderer público mapea esos tokens a clases conocidas y continúa sin usar `v-html`.
+
+Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, vista previa editorial, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---
 

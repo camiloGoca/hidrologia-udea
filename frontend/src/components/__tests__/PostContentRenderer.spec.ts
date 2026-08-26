@@ -123,4 +123,79 @@ describe('PostContentRenderer', () => {
     expect(wrapper.text()).toContain('No data')
     expect(wrapper.find('a').exists()).toBe(false)
   })
+
+  it('renders EP2 controlled styles and academic blocks through known classes', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'heading',
+              attrs: { level: 3, textAlign: 'center' },
+              content: [{ type: 'text', text: 'Subtitulo secundario' }],
+            },
+            {
+              type: 'paragraph',
+              attrs: { textAlign: 'justify' },
+              content: [
+                {
+                  type: 'text',
+                  text: 'Texto destacado',
+                  marks: [
+                    { type: 'textSize', attrs: { size: 'large' } },
+                    { type: 'textColor', attrs: { color: 'institutional' } },
+                    { type: 'highlight', attrs: { kind: 'important' } },
+                  ],
+                },
+              ],
+            },
+            {
+              type: 'academicBlock',
+              attrs: { kind: 'example' },
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Ejemplo guiado' }],
+                },
+              ],
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    expect(wrapper.find('h3').classes()).toContain('text-center')
+    expect(wrapper.find('p.text-justify').text()).toContain('Texto destacado')
+    expect(wrapper.find('span.text-xl').exists()).toBe(true)
+    expect(wrapper.find('span.text-emerald-800').exists()).toBe(true)
+    expect(wrapper.find('mark.bg-red-100').exists()).toBe(true)
+    expect(wrapper.find('section.bg-sky-50').text()).toContain('Ejemplo')
+    expect(wrapper.find('section.bg-sky-50').text()).toContain('Ejemplo guiado')
+  })
+
+  it('does not pass arbitrary class or style attributes from the document', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              attrs: {
+                textAlign: 'left',
+                class: 'bg-red-900',
+                style: 'position: fixed',
+              } as never,
+              content: [{ type: 'text', text: 'Texto seguro' }],
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    expect(wrapper.html()).not.toContain('bg-red-900')
+    expect(wrapper.html()).not.toContain('position: fixed')
+    expect(wrapper.text()).toContain('Texto seguro')
+  })
 })
