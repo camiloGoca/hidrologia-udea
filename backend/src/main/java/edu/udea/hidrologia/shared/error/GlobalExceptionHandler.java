@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import edu.udea.hidrologia.post.content.InvalidPostContentDocumentException;
 import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
 import edu.udea.hidrologia.post.service.InvalidPostPublicationException;
 import edu.udea.hidrologia.post.service.PostStateConflictException;
@@ -104,7 +105,8 @@ public class GlobalExceptionHandler {
             MissingServletRequestPartException.class,
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
-            InvalidTagRequestException.class
+            InvalidTagRequestException.class,
+            InvalidPostContentDocumentException.class
     })
     ResponseEntity<ApiErrorResponse> handleBadRequest(Exception exception, HttpServletRequest request) {
         HttpStatus status = HttpStatus.BAD_REQUEST;

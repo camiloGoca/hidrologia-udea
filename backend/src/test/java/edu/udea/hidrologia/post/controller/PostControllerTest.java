@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,6 +87,7 @@ class PostControllerTest {
                         1L,
                         "Pregunta publicada",
                         "Contenido de texto seguro.",
+                        contentDocument("Contenido de texto seguro."),
                         section(),
                         List.of(tag()),
                         PUBLISHED_AT));
@@ -93,7 +95,8 @@ class PostControllerTest {
         mockMvc.perform(get("/api/v1/posts/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(1)))
-                .andExpect(jsonPath("$.content", is("Contenido de texto seguro.")));
+                .andExpect(jsonPath("$.content", is("Contenido de texto seguro.")))
+                .andExpect(jsonPath("$.contentDocument.type", is("doc")));
     }
 
     @Test
@@ -142,5 +145,13 @@ class PostControllerTest {
 
     private TagResponse tag() {
         return new TagResponse("Morfometria", "morfometria");
+    }
+
+    private Map<String, Object> contentDocument(String content) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "paragraph",
+                        "content", List.of(Map.of("type", "text", "text", content)))));
     }
 }

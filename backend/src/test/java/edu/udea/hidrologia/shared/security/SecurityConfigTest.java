@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -128,7 +129,14 @@ class SecurityConfigTest {
                 "taller-1",
                 "Morfometria de cuencas");
         when(postQueryService.findPublishedPostById(1L))
-                .thenReturn(new PostDetailResponse(1L, "Titulo", "Contenido", section, List.of(), null));
+                .thenReturn(new PostDetailResponse(
+                        1L,
+                        "Titulo",
+                        "Contenido",
+                        contentDocument("Contenido"),
+                        section,
+                        List.of(),
+                        null));
 
         mockMvc.perform(get("/api/v1/posts/1"))
                 .andExpect(status().isOk());
@@ -379,6 +387,7 @@ class SecurityConfigTest {
                         9L,
                         "",
                         "",
+                        contentDocument(""),
                         PostStatus.DRAFT,
                         1L,
                         null,
@@ -392,6 +401,7 @@ class SecurityConfigTest {
                         9L,
                         "",
                         "",
+                        contentDocument(""),
                         PostStatus.DRAFT,
                         1L,
                         null,
@@ -529,6 +539,7 @@ class SecurityConfigTest {
                         10L,
                         "",
                         "",
+                        contentDocument(""),
                         PostStatus.DRAFT,
                         null,
                         null,
@@ -558,7 +569,7 @@ class SecurityConfigTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1"
                         }
                         """))
@@ -688,5 +699,13 @@ class SecurityConfigTest {
         mockMvc.perform(delete("/api/v1/admin/tags/1")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isNoContent());
+    }
+
+    private Map<String, Object> contentDocument(String content) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "paragraph",
+                        "content", List.of(Map.of("type", "text", "text", content)))));
     }
 }

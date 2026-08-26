@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,6 @@ import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 class AdminQuestionControllerTest {
 
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
-
     private AdminQuestionService adminQuestionService;
     private AdminQuestionDraftService adminQuestionDraftService;
     private MockMvc mockMvc;
@@ -199,6 +199,7 @@ class AdminQuestionControllerTest {
                         9L,
                         "",
                         "",
+                        contentDocument(""),
                         PostStatus.DRAFT,
                         1L,
                         null,
@@ -247,5 +248,13 @@ class AdminQuestionControllerTest {
                 "Taller 1",
                 "taller-1",
                 "Morfometria de cuencas");
+    }
+
+    private Map<String, Object> contentDocument(String content) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "paragraph",
+                        "content", List.of(Map.of("type", "text", "text", content)))));
     }
 }

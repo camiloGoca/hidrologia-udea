@@ -94,6 +94,7 @@ Tecnologías:
 * Pinia
 * Axios
 * Tailwind CSS
+* Tiptap / ProseMirror para edición estructurada de publicaciones
 
 Estructura orientativa:
 
@@ -301,6 +302,7 @@ updated_at
 id
 title
 content
+content_document
 section_id
 source_question_id
 status
@@ -308,6 +310,8 @@ created_at
 updated_at
 published_at
 ```
+
+`content_document` es un `JSONB` con el documento estructurado del editor académico y es la fuente editorial de verdad. `content` permanece como texto plano derivado para compatibilidad, validación y búsqueda futura.
 
 `source_question_id` es nullable: una publicación puede originarse en una pregunta de estudiante o ser creada directamente por el profesor en una fase futura.
 
@@ -441,7 +445,9 @@ En Admin Hashtags V1 los hashtags se gestionan únicamente desde el panel del pr
 
 En Admin Publications V2 el profesor puede crear Posts `DRAFT` manualmente desde el panel administrativo. Estos Posts usan `source_question_id = null`, `published_at = null`, título y contenido inicialmente vacíos, sección activa obligatoria y hashtags vacíos. La publicación posterior reutiliza el flujo editorial existente. Descartar un borrador manual elimina únicamente el Post y no modifica Questions.
 
-Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
+En Editor Académico EP1 el editor administrativo envía `contentDocument`; el backend valida el documento con una whitelist de nodos y marcas permitidas, extrae `content` como texto plano derivado y guarda ambos campos en la misma operación transaccional. Los endpoints públicos exponen el documento estructurado para un renderer propio de Vue que no usa `v-html` ni ejecuta HTML libre.
+
+Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, colores/tamaños/alineación en el editor, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---
 
@@ -773,6 +779,7 @@ Vue Router
 Pinia
 Axios
 Tailwind CSS
+Tiptap / ProseMirror
 
 Backend
 Java 17

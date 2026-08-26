@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.CreatePostRequest;
@@ -32,16 +33,19 @@ import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
 public class AdminPostController {
 
     private static final Set<String> CREATE_POST_FIELDS = Set.of("sectionSlug");
-    private static final Set<String> UPDATE_POST_FIELDS = Set.of("title", "content", "sectionSlug", "tagIds");
+    private static final Set<String> UPDATE_POST_FIELDS = Set.of("title", "contentDocument", "sectionSlug", "tagIds");
 
     private final AdminPostService adminPostService;
     private final AdminPostPublicationService adminPostPublicationService;
+    private final PostContentDocumentService postContentDocumentService;
 
     public AdminPostController(
             AdminPostService adminPostService,
-            AdminPostPublicationService adminPostPublicationService) {
+            AdminPostPublicationService adminPostPublicationService,
+            PostContentDocumentService postContentDocumentService) {
         this.adminPostService = adminPostService;
         this.adminPostPublicationService = adminPostPublicationService;
+        this.postContentDocumentService = postContentDocumentService;
     }
 
     @GetMapping
@@ -104,7 +108,7 @@ public class AdminPostController {
 
         return new UpdatePostRequest(
                 requiredString(request, "title"),
-                requiredString(request, "content"),
+                requiredJsonObject(request, "contentDocument"),
                 requiredString(request, "sectionSlug"),
                 optionalPositiveLongList(request, "tagIds"));
     }
@@ -162,5 +166,14 @@ public class AdminPostController {
         }
 
         return ids;
+    }
+
+    private Map<String, Object> requiredJsonObject(Map<String, Object> request, String field) {
+        Object value = request.get(field);
+        if (!(value instanceof Map<?, ?>)) {
+            throw new InvalidPostDraftRequestException("Post update request is invalid");
+        }
+
+        return postContentDocumentService.toDocument(value);
     }
 }

@@ -41,6 +41,15 @@ describe('postService', () => {
       id: 10,
       title: 'Pregunta publicada',
       content: 'Contenido de la solución',
+      contentDocument: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Contenido de la solución' }],
+          },
+        ],
+      },
       section: {
         id: 1,
         type: 'TALLER',

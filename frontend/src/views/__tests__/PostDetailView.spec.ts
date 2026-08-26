@@ -36,6 +36,19 @@ const post: PostDetail = {
   id: 10,
   title: 'Pregunta publicada',
   content: 'Linea 1\nLinea 2',
+  contentDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Linea 1' },
+          { type: 'hardBreak' },
+          { type: 'text', text: 'Linea 2' },
+        ],
+      },
+    ],
+  },
   section: {
     id: 1,
     type: 'TALLER',

@@ -13,10 +13,12 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import tools.jackson.databind.json.JsonMapper;
+
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
@@ -46,8 +48,16 @@ class PostQueryServiceTest {
     @Mock
     private TagRepository tagRepository;
 
-    @InjectMocks
     private PostQueryService postQueryService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        postQueryService = new PostQueryService(
+                postRepository,
+                sectionRepository,
+                tagRepository,
+                new PostContentDocumentService(JsonMapper.builder().build()));
+    }
 
     @Test
     void returnsSectionMetadataAndEmptyPostsWhenSectionHasNoPublishedPosts() {

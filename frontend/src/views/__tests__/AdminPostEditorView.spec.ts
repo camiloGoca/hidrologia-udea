@@ -16,6 +16,7 @@ import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost } from '@/types/adminPost'
+import type { PostContentDocument } from '@/types/postContent'
 import type { Section } from '@/types/section'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
 
@@ -150,7 +151,7 @@ describe('AdminPostEditorView', () => {
 
     expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título guardado',
-      content: 'Línea 1\nLínea 2',
+      contentDocument: contentDocument('Línea 1\nLínea 2'),
       sectionSlug: 'parcial-1',
       tagIds: [],
     })
@@ -191,7 +192,7 @@ describe('AdminPostEditorView', () => {
 
     expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título',
-      content: 'Contenido',
+      contentDocument: contentDocument('Contenido'),
       sectionSlug: 'taller-1',
       tagIds: [1, 2],
     })
@@ -334,7 +335,7 @@ describe('AdminPostEditorView', () => {
 
     expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título actualizado',
-      content: 'Contenido',
+      contentDocument: contentDocument('Contenido'),
       sectionSlug: 'taller-1',
       tagIds: [],
     })
@@ -489,6 +490,8 @@ describe('AdminPostEditorView', () => {
 
     expect(wrapper.text()).toContain('No pudimos guardar los cambios.')
     expect(wrapper.text()).not.toContain('SQL detail')
+    expect(mockedSignOut).not.toHaveBeenCalled()
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
   it('renders a friendly action error without technical details', async () => {
@@ -553,6 +556,21 @@ function mountView() {
   return mount(AdminPostEditorView, {
     global: {
       stubs: {
+        AcademicPostEditor: {
+          props: ['id', 'modelValue'],
+          emits: ['update:modelValue'],
+          computed: {
+            text() {
+              return extractText(this.modelValue as PostContentDocument)
+            },
+          },
+          methods: {
+            doc(value: string) {
+              return contentDocument(value)
+            },
+          },
+          template: '<textarea :id="id" :value="text" @input="$emit(\'update:modelValue\', doc($event.target.value))" />',
+        },
         RouterLink: RouterLinkStub,
       },
     },
@@ -579,10 +597,13 @@ function lastButtonByText(wrapper: ReturnType<typeof mountView>, text: string) {
 }
 
 function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
+  const content = overrides.content ?? ''
+
   return {
     id: 9,
     title: '',
-    content: '',
+    content,
+    contentDocument: overrides.contentDocument ?? contentDocument(content),
     status: 'DRAFT',
     sourceQuestionId: 1,
     section: {
@@ -606,6 +627,27 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     tags: [],
     ...overrides,
   }
+}
+
+function contentDocument(text: string): PostContentDocument {
+  return {
+    type: 'doc',
+    content: text
+      ? [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text }],
+          },
+        ]
+      : [{ type: 'paragraph' }],
+  }
+}
+
+function extractText(document: PostContentDocument): string {
+  return (document.content ?? [])
+    .flatMap((node) => node.content ?? [])
+    .map((node) => node.text ?? '')
+    .join('')
 }
 
 function sections(): Section[] {

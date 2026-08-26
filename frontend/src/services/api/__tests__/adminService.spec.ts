@@ -144,6 +144,10 @@ function adminPost(): AdminPost {
     id: 9,
     title: '',
     content: '',
+    contentDocument: {
+      type: 'doc',
+      content: [{ type: 'paragraph' }],
+    },
     status: 'DRAFT',
     sourceQuestionId: 1,
     section: {

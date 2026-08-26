@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import AcademicPostEditor from '@/components/AcademicPostEditor.vue'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
@@ -17,8 +18,10 @@ import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost } from '@/types/adminPost'
+import { emptyPostContentDocument, type PostContentDocument } from '@/types/postContent'
 import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
+import { extractPostContentText, samePostContent } from '@/utils/postContent'
 
 type ConfirmationAction = 'discard' | 'publish' | 'archive' | 'restore'
 
@@ -39,13 +42,13 @@ const cancelButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
 const form = reactive({
   title: '',
-  content: '',
+  contentDocument: emptyPostContentDocument(),
   sectionSlug: '',
   tagIds: [] as number[],
 })
 const saved = reactive({
   title: '',
-  content: '',
+  contentDocument: emptyPostContentDocument(),
   sectionSlug: '',
   tagIds: [] as number[],
 })
@@ -62,12 +65,12 @@ const isBusy = computed(() => isSaving.value || isSubmittingAction.value)
 const isDirty = computed(
   () =>
     form.title !== saved.title ||
-    form.content !== saved.content ||
+    !samePostContent(form.contentDocument, saved.contentDocument) ||
     form.sectionSlug !== saved.sectionSlug ||
     !sameIds(form.tagIds, saved.tagIds),
 )
 const hasRequiredPublishedContent = computed(
-  () => form.title.trim().length > 0 && form.content.trim().length > 0,
+  () => form.title.trim().length > 0 && extractPostContentText(form.contentDocument).length > 0,
 )
 const canSave = computed(() => {
   if (!post.value || !isDirty.value || isBusy.value) {
@@ -190,7 +193,7 @@ async function savePost() {
   try {
     const updatedPost = await updateAdminPost(post.value.id, {
       title: form.title,
-      content: form.content,
+      contentDocument: form.contentDocument,
       sectionSlug: form.sectionSlug,
       tagIds: [...form.tagIds],
     })
@@ -318,13 +321,17 @@ async function handleError(error: unknown, fallback: () => void) {
 
 function syncForm(currentPost: AdminPost) {
   form.title = currentPost.title
-  form.content = currentPost.content
+  form.contentDocument = cloneContent(currentPost.contentDocument)
   form.sectionSlug = currentPost.section.slug
   form.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
   saved.title = currentPost.title
-  saved.content = currentPost.content
+  saved.contentDocument = cloneContent(currentPost.contentDocument)
   saved.sectionSlug = currentPost.section.slug
   saved.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
+}
+
+function cloneContent(document: PostContentDocument) {
+  return JSON.parse(JSON.stringify(document ?? emptyPostContentDocument())) as PostContentDocument
 }
 
 function sectionsByType(type: SectionType) {
@@ -525,11 +532,9 @@ function sameIds(left: number[], right: number[]) {
               <label for="post-content" class="text-sm font-black uppercase text-emerald-700">
                 Contenido
               </label>
-              <textarea
+              <AcademicPostEditor
                 id="post-content"
-                v-model="form.content"
-                rows="14"
-                class="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base leading-7 text-slate-950 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+                v-model="form.contentDocument"
               />
             </div>
 

@@ -1,9 +1,16 @@
 package edu.udea.hidrologia.post.entity;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
@@ -40,6 +47,10 @@ public class Post {
 
     @Column(nullable = false)
     private String content;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "content_document", nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> contentDocument;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -78,7 +89,7 @@ public class Post {
             Instant updatedAt,
             Instant publishedAt,
             Set<Tag> tags) {
-        this(id, section, title, content, status, createdAt, updatedAt, publishedAt, tags, null);
+        this(id, section, title, content, documentFromPlainText(content), status, createdAt, updatedAt, publishedAt, tags, null);
     }
 
     public Post(
@@ -92,11 +103,27 @@ public class Post {
             Instant publishedAt,
             Set<Tag> tags,
             StudentQuestion sourceQuestion) {
+        this(id, section, title, content, documentFromPlainText(content), status, createdAt, updatedAt, publishedAt, tags, sourceQuestion);
+    }
+
+    public Post(
+            Long id,
+            Section section,
+            String title,
+            String content,
+            Map<String, Object> contentDocument,
+            PostStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant publishedAt,
+            Set<Tag> tags,
+            StudentQuestion sourceQuestion) {
         validateEditorialContent(title, content, status);
         this.id = id;
         this.section = section;
         this.title = title;
         this.content = content;
+        this.contentDocument = contentDocument == null ? emptyContentDocument() : deepCopyDocument(contentDocument);
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -111,6 +138,7 @@ public class Post {
                 question.getSection(),
                 "",
                 "",
+                emptyContentDocument(),
                 PostStatus.DRAFT,
                 now,
                 now,
@@ -125,6 +153,7 @@ public class Post {
                 section,
                 "",
                 "",
+                emptyContentDocument(),
                 PostStatus.DRAFT,
                 now,
                 now,
@@ -133,12 +162,17 @@ public class Post {
                 null);
     }
 
-    public void update(String title, String content, Section section, Instant updatedAt) {
+    public void update(String title, String content, Map<String, Object> contentDocument, Section section, Instant updatedAt) {
         validateEditorialContent(title, content, status);
         this.title = title;
         this.content = content;
+        this.contentDocument = deepCopyDocument(contentDocument);
         this.section = section;
         this.updatedAt = updatedAt;
+    }
+
+    public void update(String title, String content, Section section, Instant updatedAt) {
+        update(title, content, documentFromPlainText(content), section, updatedAt);
     }
 
     public void replaceTags(Collection<Tag> tags, Instant updatedAt) {
@@ -193,6 +227,10 @@ public class Post {
         return content;
     }
 
+    public Map<String, Object> getContentDocument() {
+        return deepCopyDocument(contentDocument);
+    }
+
     public PostStatus getStatus() {
         return status;
     }
@@ -229,5 +267,59 @@ public class Post {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static Map<String, Object> emptyContentDocument() {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("type", "doc");
+        document.put("content", List.of(Map.of("type", "paragraph")));
+
+        return document;
+    }
+
+    private static Map<String, Object> documentFromPlainText(String plainText) {
+        if (plainText == null || plainText.isBlank()) {
+            return emptyContentDocument();
+        }
+
+        Map<String, Object> document = new LinkedHashMap<>();
+        List<Map<String, Object>> content = new ArrayList<>();
+        for (String line : plainText.split("\\R", -1)) {
+            Map<String, Object> paragraph = new LinkedHashMap<>();
+            paragraph.put("type", "paragraph");
+            if (!line.isEmpty()) {
+                paragraph.put("content", List.of(Map.of(
+                        "type", "text",
+                        "text", line)));
+            }
+            content.add(paragraph);
+        }
+        document.put("type", "doc");
+        document.put("content", content);
+
+        return document;
+    }
+
+    private static Map<String, Object> deepCopyDocument(Map<String, Object> document) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        document.forEach((key, value) -> copy.put(key, deepCopyValue(value)));
+
+        return copy;
+    }
+
+    private static Object deepCopyValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, entry) -> copy.put(String.valueOf(key), deepCopyValue(entry)));
+
+            return copy;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .map(Post::deepCopyValue)
+                    .toList();
+        }
+
+        return value;
     }
 }

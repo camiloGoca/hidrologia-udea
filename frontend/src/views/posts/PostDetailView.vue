@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import HashtagChip from '@/components/HashtagChip.vue'
+import PostContentRenderer from '@/components/PostContentRenderer'
 import { getPostById } from '@/services/api/postService'
 import type { PostDetail } from '@/types/post'
 
@@ -92,11 +93,7 @@ watch(
         <HashtagChip v-for="tag in post.tags" :key="tag.slug" :tag="tag" />
       </div>
 
-      <div
-        class="mt-8 whitespace-pre-wrap rounded-3xl border border-slate-200 bg-white p-7 text-lg leading-8 text-slate-800 shadow-sm sm:p-10"
-      >
-        {{ post.content }}
-      </div>
+      <PostContentRenderer class="mt-8" :document="post.contentDocument" />
     </article>
   </section>
 </template>

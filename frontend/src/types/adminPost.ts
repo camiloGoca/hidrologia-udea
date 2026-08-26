@@ -1,4 +1,5 @@
 import type { AdminQuestionSection, AdminQuestionStatus } from '@/types/adminQuestion'
+import type { PostContentDocument } from '@/types/postContent'
 
 export type AdminPostStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
@@ -21,6 +22,7 @@ export interface AdminPost {
   id: number
   title: string
   content: string
+  contentDocument: PostContentDocument
   status: AdminPostStatus
   sourceQuestionId: number | null
   section: AdminQuestionSection
@@ -53,7 +55,7 @@ export interface AdminPostsResponse {
 
 export interface UpdateAdminPostRequest {
   title: string
-  content: string
+  contentDocument: PostContentDocument
   sectionSlug: string
   tagIds?: number[] | null
 }

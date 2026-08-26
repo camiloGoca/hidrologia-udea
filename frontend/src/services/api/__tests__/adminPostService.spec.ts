@@ -13,6 +13,7 @@ import {
   updateAdminPost,
 } from '@/services/api/adminPostService'
 import type { AdminPost, AdminPostsResponse } from '@/types/adminPost'
+import type { PostContentDocument } from '@/types/postContent'
 
 vi.mock('@/services/api/adminHttpClient', () => ({
   adminHttpClient: {
@@ -69,10 +70,51 @@ describe('adminPostService', () => {
     })
     const payload = {
       title: 'Título',
-      content: 'Contenido',
+      contentDocument: contentDocument('Contenido'),
       sectionSlug: 'taller-1',
       tagIds: [1, 2],
     }
+    mockedPatch.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
+
+    await expect(updateAdminPost(9, payload)).resolves.toEqual(draft)
+
+    expect(mockedPatch).toHaveBeenCalledWith('/admin/posts/9', payload)
+  })
+
+  it('sends link content documents unchanged when updating an admin post', async () => {
+    const contentDocumentWithLink: PostContentDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'UdeA',
+              marks: [
+                {
+                  type: 'link',
+                  attrs: {
+                    href: 'https://www.udea.edu.co',
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                    class: null,
+                    title: null,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const payload = {
+      title: 'Título',
+      contentDocument: contentDocumentWithLink,
+      sectionSlug: 'taller-1',
+      tagIds: [],
+    }
+    const draft = adminPost({ title: 'Título', contentDocument: contentDocumentWithLink })
     mockedPatch.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
 
     await expect(updateAdminPost(9, payload)).resolves.toEqual(draft)
@@ -120,10 +162,13 @@ describe('adminPostService', () => {
 })
 
 function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
+  const content = overrides.content ?? ''
+
   return {
     id: 9,
     title: '',
-    content: '',
+    content,
+    contentDocument: overrides.contentDocument ?? contentDocument(content),
     status: 'DRAFT',
     sourceQuestionId: 1,
     section: {
@@ -146,5 +191,19 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     publishedAt: null,
     tags: [],
     ...overrides,
+  }
+}
+
+function contentDocument(text: string): PostContentDocument {
+  return {
+    type: 'doc',
+    content: text
+      ? [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text }],
+          },
+        ]
+      : [{ type: 'paragraph' }],
   }
 }

@@ -342,10 +342,18 @@ function summary(overrides: Partial<AdminPostSummary> = {}): AdminPostSummary {
 }
 
 function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
+  const content = overrides.content ?? ''
+
   return {
     id: 10,
     title: '',
-    content: '',
+    content,
+    contentDocument: overrides.contentDocument ?? {
+      type: 'doc',
+      content: content
+        ? [{ type: 'paragraph', content: [{ type: 'text', text: content }] }]
+        : [{ type: 'paragraph' }],
+    },
     status: 'DRAFT',
     sourceQuestionId: null,
     section: sections()[0]!,

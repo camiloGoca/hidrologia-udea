@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,9 @@ import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import tools.jackson.databind.json.JsonMapper;
+
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
@@ -40,6 +44,8 @@ import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 class AdminPostControllerTest {
 
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
+    private static final PostContentDocumentService POST_CONTENT_DOCUMENT_SERVICE =
+            new PostContentDocumentService(JsonMapper.builder().build());
 
     private AdminPostService adminPostService;
     private AdminPostPublicationService adminPostPublicationService;
@@ -51,7 +57,8 @@ class AdminPostControllerTest {
         adminPostPublicationService = Mockito.mock(AdminPostPublicationService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(new AdminPostController(
                         adminPostService,
-                        adminPostPublicationService))
+                        adminPostPublicationService,
+                        POST_CONTENT_DOCUMENT_SERVICE))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -190,6 +197,7 @@ class AdminPostControllerTest {
                         9L,
                         "Título guardado",
                         "Línea 1\nLínea 2",
+                        contentDocument("Línea 1\nLínea 2"),
                         PostStatus.PUBLISHED,
                         1L,
                         section(),
@@ -204,7 +212,15 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "  Título guardado  ",
-                          "content": "  Línea 1\\nLínea 2  ",
+                          "contentDocument": {
+                            "type": "doc",
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "content": [{ "type": "text", "text": "Línea 1" }]
+                              }
+                            ]
+                          },
                           "sectionSlug": "taller-1",
                           "tagIds": [1, 1]
                         }
@@ -224,7 +240,7 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": null,
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1"
                         }
                         """))
@@ -238,7 +254,7 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1",
                           "status": "PUBLISHED"
                         }
@@ -256,7 +272,7 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1"
                         }
                         """))
@@ -273,7 +289,7 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1",
                           "tagIds": []
                         }
@@ -288,12 +304,47 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1",
                           "tagIds": [0]
                         }
                         """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsBadRequestForUnsafeLinkDocument() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/posts/9")
+                .contentType("application/json")
+                .content("""
+                        {
+                          "title": "Título",
+                          "contentDocument": {
+                            "type": "doc",
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Link",
+                                    "marks": [
+                                      {
+                                        "type": "link",
+                                        "attrs": { "href": "javascript:alert(1)" }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "sectionSlug": "taller-1"
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(adminPostService);
     }
 
     @Test
@@ -325,7 +376,7 @@ class AdminPostControllerTest {
                 .content("""
                         {
                           "title": "Título",
-                          "content": "Contenido",
+                          "contentDocument": { "type": "doc", "content": [{ "type": "paragraph" }] },
                           "sectionSlug": "taller-1"
                         }
                         """))
@@ -391,6 +442,7 @@ class AdminPostControllerTest {
                 9L,
                 "",
                 "",
+                contentDocument(""),
                 PostStatus.DRAFT,
                 1L,
                 section(),
@@ -406,6 +458,7 @@ class AdminPostControllerTest {
                 10L,
                 "",
                 "",
+                contentDocument(""),
                 PostStatus.DRAFT,
                 null,
                 section(),
@@ -421,6 +474,7 @@ class AdminPostControllerTest {
                 9L,
                 "Título publicado",
                 "Contenido",
+                contentDocument("Contenido"),
                 PostStatus.PUBLISHED,
                 1L,
                 section(),
@@ -436,6 +490,7 @@ class AdminPostControllerTest {
                 9L,
                 "Título publicado",
                 "Contenido",
+                contentDocument("Contenido"),
                 PostStatus.ARCHIVED,
                 1L,
                 section(),
@@ -463,5 +518,13 @@ class AdminPostControllerTest {
                 StudentQuestionStatus.PENDING,
                 NOW,
                 true);
+    }
+
+    private Map<String, Object> contentDocument(String content) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "paragraph",
+                        "content", List.of(Map.of("type", "text", "text", content)))));
     }
 }

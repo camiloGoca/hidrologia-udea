@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
@@ -27,14 +28,17 @@ public class PostQueryService {
     private final PostRepository postRepository;
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
+    private final PostContentDocumentService postContentDocumentService;
 
     public PostQueryService(
             PostRepository postRepository,
             SectionRepository sectionRepository,
-            TagRepository tagRepository) {
+            TagRepository tagRepository,
+            PostContentDocumentService postContentDocumentService) {
         this.postRepository = postRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
+        this.postContentDocumentService = postContentDocumentService;
     }
 
     @Transactional(readOnly = true)
@@ -83,6 +87,7 @@ public class PostQueryService {
                 post.getId(),
                 post.getTitle(),
                 post.getContent(),
+                postContentDocumentService.toSerializableDocument(post.getContentDocument()),
                 toSectionResponse(post.getSection()),
                 toTagResponses(post),
                 post.getPublishedAt());

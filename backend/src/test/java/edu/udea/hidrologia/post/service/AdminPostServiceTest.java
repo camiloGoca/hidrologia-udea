@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -26,6 +27,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import tools.jackson.databind.json.JsonMapper;
+
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.CreatePostRequest;
@@ -58,6 +62,10 @@ class AdminPostServiceTest {
     @Mock
     private TagRepository tagRepository;
 
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+
+    private final PostContentDocumentService postContentDocumentService = new PostContentDocumentService(JSON_MAPPER);
+
     private AdminPostService adminPostService;
 
     @BeforeEach
@@ -66,6 +74,7 @@ class AdminPostServiceTest {
                 postRepository,
                 sectionRepository,
                 tagRepository,
+                postContentDocumentService,
                 Clock.fixed(UPDATED_AT, ZoneOffset.UTC));
     }
 
@@ -233,7 +242,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  Titulo  ", "  Linea 1\nLinea 2  ", "parcial-1", null));
+                new UpdatePostRequest("  Titulo  ", contentDocument("  Linea 1\nLinea 2  "), "parcial-1", null));
 
         assertThat(response.title()).isEqualTo("Titulo");
         assertThat(response.content()).isEqualTo("Linea 1\nLinea 2");
@@ -249,7 +258,7 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("parcial-1")).thenReturn(Optional.of(newSection));
 
-        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", "Contenido", "parcial-1", null));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", contentDocument("Contenido"), "parcial-1", null));
 
         assertThat(draft.getSection().getSlug()).isEqualTo("parcial-1");
         assertThat(question.getSection().getSlug()).isEqualTo("taller-1");
@@ -264,7 +273,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("   ", "   ", "taller-1", null));
+                new UpdatePostRequest("   ", contentDocument("   "), "taller-1", null));
 
         assertThat(response.title()).isEmpty();
         assertThat(response.content()).isEmpty();
@@ -288,7 +297,7 @@ class AdminPostServiceTest {
         when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
         when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
 
-        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", "Contenido", "taller-1", null));
+        adminPostService.updatePost(9L, new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", null));
 
         assertThat(draft.getTags()).containsExactly(tag);
     }
@@ -313,7 +322,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of()));
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of()));
 
         assertThat(draft.getTags()).isEmpty();
         assertThat(response.tags()).isEmpty();
@@ -332,7 +341,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(2L, 1L)));
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of(2L, 1L)));
 
         assertThat(draft.getTags()).containsExactly(cuencas, balance);
         assertThat(response.tags())
@@ -351,7 +360,7 @@ class AdminPostServiceTest {
 
         adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L, 1L)));
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of(1L, 1L)));
 
         assertThat(draft.getTags()).containsExactly(tag);
     }
@@ -367,7 +376,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Nuevo", "Contenido", "parcial-1", List.of(404L))))
+                new UpdatePostRequest("Nuevo", contentDocument("Contenido"), "parcial-1", List.of(404L))))
                 .isInstanceOf(InvalidPostPublicationException.class)
                 .hasMessage("Uno o más hashtags seleccionados no existen.");
 
@@ -385,7 +394,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(0L))))
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of(0L))))
                 .isInstanceOf(InvalidPostPublicationException.class);
     }
 
@@ -411,7 +420,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L)));
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of(1L)));
 
         assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
@@ -441,7 +450,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", List.of(1L)));
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", List.of(1L)));
 
         assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
@@ -469,7 +478,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  Nuevo titulo  ", "  Linea 1\nLinea 2  ", "parcial-1", null));
+                new UpdatePostRequest("  Nuevo titulo  ", contentDocument("  Linea 1\nLinea 2  "), "parcial-1", null));
 
         assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
@@ -498,7 +507,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("  ", "Contenido", "taller-1", null)))
+                new UpdatePostRequest("  ", contentDocument("Contenido"), "taller-1", null)))
                 .isInstanceOf(InvalidPostPublicationException.class);
     }
 
@@ -521,7 +530,7 @@ class AdminPostServiceTest {
 
         AdminPostResponse response = adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Archivada", "Contenido", "taller-1", null));
+                new UpdatePostRequest("Archivada", contentDocument("Contenido"), "taller-1", null));
 
         assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
         assertThat(response.publishedAt()).isEqualTo(NOW);
@@ -547,7 +556,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "  ", "taller-1", null)))
+                new UpdatePostRequest("Titulo", contentDocument("  "), "taller-1", null)))
                 .isInstanceOf(InvalidPostPublicationException.class);
     }
 
@@ -557,7 +566,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 404L,
-                new UpdatePostRequest("Titulo", "Contenido", "taller-1", null)))
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "taller-1", null)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Post not found");
     }
@@ -570,7 +579,7 @@ class AdminPostServiceTest {
 
         assertThatThrownBy(() -> adminPostService.updatePost(
                 9L,
-                new UpdatePostRequest("Titulo", "Contenido", "inactiva", null)))
+                new UpdatePostRequest("Titulo", contentDocument("Contenido"), "inactiva", null)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Section not found");
     }
@@ -665,6 +674,22 @@ class AdminPostServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void rejectsUnknownContentDocumentNodesWithoutMutatingPost() throws Exception {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", invalidImageDocument(), "taller-1", null)))
+                .isInstanceOf(edu.udea.hidrologia.post.content.InvalidPostContentDocumentException.class);
+
+        assertThat(draft.getTitle()).isEmpty();
+        assertThat(draft.getContent()).isEmpty();
+    }
+
     private Post draftPost(StudentQuestion question) {
         return new Post(
                 9L,
@@ -716,6 +741,16 @@ class AdminPostServiceTest {
                 id.intValue(),
                 true,
                 NOW);
+    }
+
+    private Map<String, Object> contentDocument(String plainText) {
+        return postContentDocumentService.documentFromPlainText(plainText);
+    }
+
+    private Map<String, Object> invalidImageDocument() {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of("type", "image")));
     }
 
     private PageRequest pageRequest(int page, int size) {

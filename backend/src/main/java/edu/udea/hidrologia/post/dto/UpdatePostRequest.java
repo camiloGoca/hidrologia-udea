@@ -1,6 +1,7 @@
 package edu.udea.hidrologia.post.dto;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -14,7 +15,7 @@ public record UpdatePostRequest(
         String title,
 
         @NotNull
-        String content,
+        Map<String, Object> contentDocument,
 
         @NotBlank
         @Size(min = 1, max = 120)

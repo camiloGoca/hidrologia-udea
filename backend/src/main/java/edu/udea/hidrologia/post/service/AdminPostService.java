@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
@@ -43,16 +45,19 @@ public class AdminPostService {
     private final PostRepository postRepository;
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
+    private final PostContentDocumentService postContentDocumentService;
     private final Clock clock;
 
     public AdminPostService(
             PostRepository postRepository,
             SectionRepository sectionRepository,
             TagRepository tagRepository,
+            PostContentDocumentService postContentDocumentService,
             Clock clock) {
         this.postRepository = postRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
+        this.postContentDocumentService = postContentDocumentService;
         this.clock = clock;
     }
 
@@ -102,11 +107,12 @@ public class AdminPostService {
         Section section = sectionRepository.findBySlugAndActiveTrue(request.sectionSlug().strip())
                 .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
         String title = normalize(request.title());
-        String content = normalize(request.content());
+        Map<String, Object> contentDocument = postContentDocumentService.validate(request.contentDocument());
+        String content = postContentDocumentService.extractPlainText(contentDocument);
         validateEditableContent(post, title, content);
         List<Tag> tags = resolveTags(request.tagIds());
         Instant now = Instant.now(clock);
-        post.update(title, content, section, now);
+        post.update(title, content, contentDocument, section, now);
         if (request.tagIds() != null) {
             post.replaceTags(tags, now);
         }
@@ -133,6 +139,7 @@ public class AdminPostService {
                 post.getId(),
                 post.getTitle(),
                 post.getContent(),
+                postContentDocumentService.toSerializableDocument(post.getContentDocument()),
                 post.getStatus(),
                 sourceQuestion == null ? null : sourceQuestion.getId(),
                 toSectionResponse(post.getSection()),

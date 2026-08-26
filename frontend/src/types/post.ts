@@ -1,4 +1,5 @@
 import type { SectionType } from './section'
+import type { PostContentDocument } from './postContent'
 
 export interface PostTag {
   name: string
@@ -23,6 +24,7 @@ export interface PostSummary {
 
 export interface PostDetail extends PostSummary {
   content: string
+  contentDocument: PostContentDocument
 }
 
 export interface SectionPostsResponse {

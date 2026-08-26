@@ -137,6 +137,10 @@ describe('AdminQuestionDetailView', () => {
       status: 'DRAFT',
       title: '',
       content: '',
+      contentDocument: {
+        type: 'doc',
+        content: [{ type: 'paragraph' }],
+      },
       sourceQuestionId: 1,
       sourceQuestion: null,
       section: baseDetail().section,

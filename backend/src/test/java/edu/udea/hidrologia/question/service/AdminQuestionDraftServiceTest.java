@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +39,6 @@ import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 class AdminQuestionDraftServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-01-02T00:00:00Z");
-
     @Mock
     private StudentQuestionRepository studentQuestionRepository;
 
@@ -197,6 +198,7 @@ class AdminQuestionDraftServiceTest {
                 9L,
                 "",
                 "",
+                contentDocument(""),
                 PostStatus.DRAFT,
                 1L,
                 null,
@@ -237,5 +239,13 @@ class AdminQuestionDraftServiceTest {
                 1,
                 true,
                 NOW);
+    }
+
+    private Map<String, Object> contentDocument(String content) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "paragraph",
+                        "content", List.of(Map.of("type", "text", "text", content)))));
     }
 }

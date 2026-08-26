@@ -19,6 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.json.JsonMapper;
+
+import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
@@ -54,6 +57,7 @@ class AdminPostPublicationServiceTest {
                 postRepository,
                 sectionRepository,
                 tagRepository,
+                new PostContentDocumentService(JsonMapper.builder().build()),
                 Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC));
         publicationService = new AdminPostPublicationService(
                 postRepository,

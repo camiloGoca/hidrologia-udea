@@ -359,11 +359,20 @@ Implementado en la fase Admin Publications V2:
 * el editor existente permite completar título, contenido, sección y hashtags;
 * descartar un borrador manual elimina únicamente ese Post y no afecta preguntas.
 
+Implementado en la fase Editor Académico EP1:
+
+* el profesor edita el contenido de publicaciones mediante un editor visual estructurado;
+* el contenido editorial se guarda como documento estructurado y no como HTML libre;
+* el sistema soporta párrafos, subtítulos, negrita, cursiva, subrayado, listas, citas, enlaces y saltos de línea;
+* el texto plano se mantiene derivado del documento para compatibilidad, validación y búsqueda futura;
+* el render público interpreta únicamente nodos y marcas permitidas, sin ejecutar HTML enviado por usuarios.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
 
 * búsqueda avanzada o autocompletado de hashtags;
+* colores, tamaños controlados y alineación en el editor académico;
 * redirects si alguna vez se permite cambiar slugs;
 * imágenes propias de Posts;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;
