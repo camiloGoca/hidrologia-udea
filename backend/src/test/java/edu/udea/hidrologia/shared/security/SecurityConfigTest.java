@@ -38,6 +38,7 @@ import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostImageService;
 import edu.udea.hidrologia.post.service.AdminPostService;
+import edu.udea.hidrologia.post.service.PostImageCleanupService;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -86,6 +87,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminPostImageService adminPostImageService;
+
+    @MockitoBean
+    private PostImageCleanupService postImageCleanupService;
 
     @MockitoBean
     private AdminTagService adminTagService;

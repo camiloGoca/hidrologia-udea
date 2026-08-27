@@ -385,7 +385,15 @@ Implementado en la fase Editor Académico EP3B:
 * el pie de imagen y el tamaño visual pertenecen al uso editorial dentro de `content_document`;
 * el render público resuelve cada imagen contra la metadata del Post actual y no utiliza URLs provenientes del documento;
 * el backend valida que las imágenes referenciadas existan y pertenezcan a la publicación antes de guardar;
-* no hay redimensionamiento libre, píxeles/porcentajes persistidos, vista previa ni limpieza automática avanzada de imágenes no usadas todavía.
+* no hay redimensionamiento libre, píxeles/porcentajes persistidos ni vista previa todavía.
+
+Implementado en la fase Editor Académico EP3C:
+
+* las imágenes de Post no referenciadas pueden eliminarse explícitamente desde el panel administrativo;
+* las imágenes todavía referenciadas por `content_document` no pueden eliminarse;
+* descartar un `DRAFT` limpia primero Cloudinary, luego metadata `post_images` y finalmente el Post;
+* si Cloudinary responde `NOT_FOUND`, la limpieza se considera idempotente y puede continuar;
+* las `QuestionAttachment` permanecen separadas, privadas y no se modifican por este cleanup.
 
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
@@ -395,7 +403,6 @@ Futuro:
 * vista previa del contenido antes de publicar;
 * redirects si alguna vez se permite cambiar slugs;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;
-* limpieza automática avanzada de imágenes de Post no referenciadas;
 * versionado o historial de cambios;
 * autosave.
 

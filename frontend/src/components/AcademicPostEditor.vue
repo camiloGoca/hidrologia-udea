@@ -494,7 +494,7 @@ function isSafeLink(href: string): boolean {
 </script>
 
 <template>
-  <div class="mt-3 rounded-3xl border border-slate-300 bg-white shadow-sm">
+  <div class="mt-3 min-w-0 max-w-full rounded-3xl border border-slate-300 bg-white shadow-sm">
     <div
       class="editor-toolbar grid gap-4 rounded-t-3xl border-b border-slate-200 bg-slate-50 p-4"
       aria-label="Herramientas del editor académico"
@@ -845,7 +845,7 @@ function isSafeLink(href: string): boolean {
       </div>
     </div>
 
-    <div class="relative">
+    <div class="relative min-w-0 max-w-full">
       <p
         v-if="isEditorEmpty"
         class="pointer-events-none absolute left-5 top-6 max-w-lg text-base font-semibold leading-7 text-slate-400 sm:left-8 sm:top-8"
@@ -863,18 +863,24 @@ function isSafeLink(href: string): boolean {
   flex-wrap: wrap;
   gap: 0.9rem;
   align-items: end;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .editor-toolbar {
   position: sticky;
   top: 1rem;
   z-index: 20;
+  min-width: 0;
+  max-width: 100%;
   box-shadow: 0 12px 26px rgb(15 23 42 / 0.08);
 }
 
 .editor-group {
   display: grid;
   gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .editor-label {
@@ -889,6 +895,8 @@ function isSafeLink(href: string): boolean {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .editor-select,
@@ -901,6 +909,7 @@ function isSafeLink(href: string): boolean {
   font-size: 0.8rem;
   font-weight: 900;
   color: rgb(15 23 42);
+  max-width: 100%;
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
@@ -910,6 +919,11 @@ function isSafeLink(href: string): boolean {
 
 .editor-select {
   padding-right: 2rem;
+}
+
+.editor-button {
+  white-space: normal;
+  text-align: center;
 }
 
 .editor-button:hover,
@@ -934,7 +948,9 @@ function isSafeLink(href: string): boolean {
 
 :deep(.ProseMirror) {
   min-height: 26rem;
+  max-width: 100%;
   border-radius: 0 0 1.5rem 1.5rem;
+  overflow-wrap: anywhere;
   font-family:
     Inter,
     ui-sans-serif,

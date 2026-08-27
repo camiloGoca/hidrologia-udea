@@ -14,6 +14,7 @@ import edu.udea.hidrologia.link.service.InterestingLinkService;
 import edu.udea.hidrologia.post.service.AdminPostImageService;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
 import edu.udea.hidrologia.post.service.AdminPostService;
+import edu.udea.hidrologia.post.service.PostImageCleanupService;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
@@ -56,6 +57,9 @@ class SecurityConfigFirebaseDisabledTest {
 
     @MockitoBean
     private AdminPostImageService adminPostImageService;
+
+    @MockitoBean
+    private PostImageCleanupService postImageCleanupService;
 
     @MockitoBean
     private AdminTagService adminTagService;

@@ -19,6 +19,4 @@ public interface PostImageRepository extends JpaRepository<PostImage, Long> {
     Optional<PostImage> findByIdAndPostId(Long id, Long postId);
 
     long countByPostIdAndIdIn(Long postId, Set<Long> ids);
-
-    boolean existsByPostId(Long postId);
 }

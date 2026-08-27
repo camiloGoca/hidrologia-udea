@@ -53,6 +53,9 @@ class AdminPostPublicationServiceTest {
     @Mock
     private TagRepository tagRepository;
 
+    @Mock
+    private PostImageCleanupService postImageCleanupService;
+
     private AdminPostPublicationService publicationService;
 
     @BeforeEach
@@ -63,6 +66,7 @@ class AdminPostPublicationServiceTest {
                 sectionRepository,
                 tagRepository,
                 new PostContentDocumentService(JsonMapper.builder().build()),
+                postImageCleanupService,
                 Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC));
         publicationService = new AdminPostPublicationService(
                 postRepository,

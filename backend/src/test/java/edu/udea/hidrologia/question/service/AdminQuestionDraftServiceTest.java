@@ -25,9 +25,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
-import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.post.service.AdminPostService;
+import edu.udea.hidrologia.post.service.PostImageCleanupService;
 import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
@@ -48,10 +48,10 @@ class AdminQuestionDraftServiceTest {
     private PostRepository postRepository;
 
     @Mock
-    private PostImageRepository postImageRepository;
+    private AdminPostService adminPostService;
 
     @Mock
-    private AdminPostService adminPostService;
+    private PostImageCleanupService postImageCleanupService;
 
     private AdminQuestionDraftService adminQuestionDraftService;
 
@@ -60,8 +60,8 @@ class AdminQuestionDraftServiceTest {
         adminQuestionDraftService = new AdminQuestionDraftService(
                 studentQuestionRepository,
                 postRepository,
-                postImageRepository,
                 adminPostService,
+                postImageCleanupService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -152,23 +152,29 @@ class AdminQuestionDraftServiceTest {
 
         adminQuestionDraftService.discardDraft(1L);
 
-        verify(postRepository).delete(draft);
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(postImageCleanupService, postRepository);
+        inOrder.verify(postImageCleanupService).deleteAllForPost(9L);
+        inOrder.verify(postRepository).delete(draft);
         assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PENDING);
         assertThat(question.getAttachment()).isNotNull();
     }
 
     @Test
-    void rejectsDiscardWhenQuestionDraftHasPostImages() {
+    void preservesQuestionDraftAndQuestionWhenPostImageCleanupFails() {
         StudentQuestion question = question(StudentQuestionStatus.PENDING);
         Post draft = Post.createQuestionDraft(question, NOW);
         ReflectionTestUtils.setField(draft, "id", 9L);
         when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
         when(postRepository.findBySourceQuestionId(1L)).thenReturn(Optional.of(draft));
-        when(postImageRepository.existsByPostId(9L)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new PostStateConflictException("Post images could not be deleted. Try again."))
+                .when(postImageCleanupService).deleteAllForPost(9L);
 
         assertThatThrownBy(() -> adminQuestionDraftService.discardDraft(1L))
                 .isInstanceOf(PostStateConflictException.class)
-                .hasMessage("Remove post images before discarding this draft");
+                .hasMessage("Post images could not be deleted. Try again.");
+
+        verify(postRepository, org.mockito.Mockito.never()).delete(draft);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PENDING);
     }
 
     @Test

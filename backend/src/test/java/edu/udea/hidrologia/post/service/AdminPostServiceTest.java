@@ -70,6 +70,9 @@ class AdminPostServiceTest {
 
     private final PostContentDocumentService postContentDocumentService = new PostContentDocumentService(JSON_MAPPER);
 
+    @Mock
+    private PostImageCleanupService postImageCleanupService;
+
     private AdminPostService adminPostService;
 
     @BeforeEach
@@ -80,6 +83,7 @@ class AdminPostServiceTest {
                 sectionRepository,
                 tagRepository,
                 postContentDocumentService,
+                postImageCleanupService,
                 Clock.fixed(UPDATED_AT, ZoneOffset.UTC));
     }
 
@@ -615,11 +619,13 @@ class AdminPostServiceTest {
 
         adminPostService.discardManualDraft(10L);
 
-        verify(postRepository).delete(manualDraft);
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(postImageCleanupService, postRepository);
+        inOrder.verify(postImageCleanupService).deleteAllForPost(10L);
+        inOrder.verify(postRepository).delete(manualDraft);
     }
 
     @Test
-    void rejectsDiscardingManualDraftWithPostImages() {
+    void preservesManualDraftWhenPostImageCleanupFails() {
         Post manualDraft = new Post(
                 10L,
                 section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
@@ -632,11 +638,12 @@ class AdminPostServiceTest {
                 Set.of(),
                 null);
         when(postRepository.findAdminById(10L)).thenReturn(Optional.of(manualDraft));
-        when(postImageRepository.existsByPostId(10L)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new PostStateConflictException("Post images could not be deleted. Try again."))
+                .when(postImageCleanupService).deleteAllForPost(10L);
 
         assertThatThrownBy(() -> adminPostService.discardManualDraft(10L))
                 .isInstanceOf(PostStateConflictException.class)
-                .hasMessage("Remove post images before discarding this draft");
+                .hasMessage("Post images could not be deleted. Try again.");
 
         verify(postRepository, never()).delete(manualDraft);
     }

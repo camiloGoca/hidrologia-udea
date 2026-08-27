@@ -74,6 +74,18 @@ describe('AcademicPostEditor', () => {
     expect(source).toContain('color: inherit')
   })
 
+  it('keeps editor chrome constrained for narrow viewports without internal scroll containers', () => {
+    const source = readFileSync('src/components/AcademicPostEditor.vue', 'utf-8')
+
+    expect(source).toContain('min-w-0 max-w-full rounded-3xl')
+    expect(source).toContain('min-width: 0')
+    expect(source).toContain('max-width: 100%')
+    expect(source).toContain('white-space: normal')
+    expect(source).toContain('overflow-wrap: anywhere')
+    expect(source).not.toContain('overflow-hidden')
+    expect(source).not.toContain('overflow-auto')
+  })
+
   it('creates the Tiptap link JSON shape expected by the backend normalizer', () => {
     const editor = createEditor()
 

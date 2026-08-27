@@ -18,7 +18,7 @@ import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
-import type { AdminPost } from '@/types/adminPost'
+import type { AdminPost, AdminPostImage } from '@/types/adminPost'
 import type { PostContentDocument } from '@/types/postContent'
 import type { Section } from '@/types/section'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
@@ -147,16 +147,7 @@ describe('AdminPostEditorView', () => {
   })
 
   it('passes post images and image callbacks to the academic editor', async () => {
-    const image = {
-      id: 15,
-      secureUrl: 'https://res.cloudinary.com/demo/image/upload/post.png',
-      format: 'png',
-      width: 800,
-      height: 600,
-      bytes: 1200,
-      altText: 'Grafica',
-      createdAt: '2026-01-01T00:00:00Z',
-    }
+    const image = postImage(15, 'Grafica')
     mockedGetAdminPost.mockResolvedValue(adminPost({ images: [] }))
     mockedUploadAdminPostImage.mockResolvedValue(image)
 
@@ -174,6 +165,95 @@ describe('AdminPostEditorView', () => {
 
     expect(mockedUploadAdminPostImage).toHaveBeenCalledWith(9, { file, altText: 'Grafica' })
     expect(wrapper.getComponent({ name: 'AcademicPostEditor' }).props('images')).toEqual([image])
+  })
+
+  it('shows only post images that are not referenced by the content document', async () => {
+    const referencedImage = postImage(15, 'Imagen en uso')
+    const unusedImage = postImage(16, 'Imagen sin uso')
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        contentDocument: contentDocumentWithImage(15),
+        images: [referencedImage, unusedImage],
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Imágenes no utilizadas')
+    expect(wrapper.text()).toContain('Imagen sin uso')
+    expect(wrapper.find('img[alt="Imagen sin uso"]').exists()).toBe(true)
+    expect(wrapper.find('img[alt="Imagen en uso"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-labelledby="unused-images-title"] li').classes()).toEqual(
+      expect.arrayContaining(['min-w-0', 'max-w-full', 'flex-col', 'sm:flex-row']),
+    )
+    expect(buttonByText(wrapper, 'Eliminar archivo').classes()).toEqual(
+      expect.arrayContaining(['w-full', 'sm:w-auto']),
+    )
+  })
+
+  it('deletes an unused post image through the admin endpoint and updates local image state', async () => {
+    const unusedImage = postImage(16, 'Imagen sin uso')
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        contentDocument: contentDocument('Contenido'),
+        images: [unusedImage],
+      }),
+    )
+    mockedDeleteAdminPostImage.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Eliminar archivo').trigger('click')
+    await flushPromises()
+
+    expect(mockedDeleteAdminPostImage).toHaveBeenCalledWith(9, 16)
+    expect(wrapper.text()).toContain('Archivo eliminado.')
+    expect(wrapper.find('img[alt="Imagen sin uso"]').exists()).toBe(false)
+  })
+
+  it('keeps an unused image visible when deletion fails', async () => {
+    const unusedImage = postImage(16, 'Imagen sin uso')
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        contentDocument: contentDocument('Contenido'),
+        images: [unusedImage],
+      }),
+    )
+    mockedDeleteAdminPostImage.mockRejectedValue(new Error('Cloudinary detail'))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Eliminar archivo').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No pudimos eliminar esta imagen no utilizada.')
+    expect(wrapper.text()).not.toContain('Cloudinary detail')
+    expect(wrapper.find('img[alt="Imagen sin uso"]').exists()).toBe(true)
+  })
+
+  it('explains referenced-image conflicts without modifying the content document', async () => {
+    const unusedImage = postImage(16, 'Imagen sin uso')
+    const document = contentDocument('Contenido')
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        contentDocument: document,
+        images: [unusedImage],
+      }),
+    )
+    mockedDeleteAdminPostImage.mockRejectedValue({ isAxiosError: true, response: { status: 409 } })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Eliminar archivo').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Guarda primero el documento sin esta imagen')
+    expect(wrapper.getComponent({ name: 'AcademicPostEditor' }).props('modelValue')).toEqual(document)
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
   })
 
   it('tracks dirty state and saves a draft manually', async () => {
@@ -700,6 +780,38 @@ function contentDocument(text: string): PostContentDocument {
           },
         ]
       : [{ type: 'paragraph' }],
+  }
+}
+
+function contentDocumentWithImage(imageId: number): PostContentDocument {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Contenido' }],
+      },
+      {
+        type: 'image',
+        attrs: {
+          postImageId: imageId,
+          displaySize: 'medium',
+        },
+      },
+    ],
+  }
+}
+
+function postImage(id: number, altText: string): AdminPostImage {
+  return {
+    id,
+    secureUrl: `https://res.cloudinary.com/demo/image/upload/post-${id}.png`,
+    format: 'png',
+    width: 800,
+    height: 600,
+    bytes: 1200,
+    altText,
+    createdAt: '2026-01-01T00:00:00Z',
   }
 }
 

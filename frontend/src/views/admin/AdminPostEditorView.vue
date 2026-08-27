@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { isAxiosError } from 'axios'
 
 import AcademicPostEditor from '@/components/AcademicPostEditor.vue'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
@@ -21,7 +22,11 @@ import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost, AdminPostImage } from '@/types/adminPost'
-import { emptyPostContentDocument, type PostContentDocument } from '@/types/postContent'
+import {
+  emptyPostContentDocument,
+  type PostContentDocument,
+  type PostContentNode,
+} from '@/types/postContent'
 import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
 import { extractPostContentText, samePostContent } from '@/utils/postContent'
@@ -38,8 +43,11 @@ const hasError = ref(false)
 const pendingAction = ref<ConfirmationAction | null>(null)
 const isSubmittingAction = ref(false)
 const isSaving = ref(false)
+const deletingUnusedImageId = ref<number | null>(null)
 const actionError = ref(false)
 const saveError = ref(false)
+const unusedImageError = ref('')
+const unusedImageSuccess = ref('')
 const successMessage = ref('')
 const cancelButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
@@ -57,6 +65,10 @@ const saved = reactive({
 })
 
 const sourceQuestion = computed(() => post.value?.sourceQuestion ?? null)
+const referencedImageIds = computed(() => collectReferencedImageIds(form.contentDocument))
+const unusedImages = computed(() =>
+  post.value?.images.filter((image) => !referencedImageIds.value.has(image.id)) ?? [],
+)
 const displayNickname = computed(() => sourceQuestion.value?.nickname ?? 'Anónimo')
 const displayTitle = computed(() => post.value?.title.trim() || 'Sin título')
 const workshopSections = computed(() => sectionsByType('TALLER'))
@@ -64,7 +76,7 @@ const examSections = computed(() => sectionsByType('PARCIAL'))
 const isDraft = computed(() => post.value?.status === 'DRAFT')
 const isPublished = computed(() => post.value?.status === 'PUBLISHED')
 const isArchived = computed(() => post.value?.status === 'ARCHIVED')
-const isBusy = computed(() => isSaving.value || isSubmittingAction.value)
+const isBusy = computed(() => isSaving.value || isSubmittingAction.value || deletingUnusedImageId.value !== null)
 const isDirty = computed(
   () =>
     form.title !== saved.title ||
@@ -252,6 +264,31 @@ async function deleteEditorImage(imageId: number): Promise<void> {
   }
 }
 
+async function deleteUnusedImage(imageId: number): Promise<void> {
+  if (!post.value || deletingUnusedImageId.value !== null) {
+    return
+  }
+
+  deletingUnusedImageId.value = imageId
+  unusedImageError.value = ''
+  unusedImageSuccess.value = ''
+
+  try {
+    await deleteAdminPostImage(post.value.id, imageId)
+    post.value = {
+      ...post.value,
+      images: post.value.images.filter((image) => image.id !== imageId),
+    }
+    unusedImageSuccess.value = 'Archivo eliminado.'
+  } catch (error) {
+    await handleError(error, () => {
+      unusedImageError.value = unusedImageDeleteMessage(error)
+    })
+  } finally {
+    deletingUnusedImageId.value = null
+  }
+}
+
 async function openConfirmation(action: ConfirmationAction) {
   actionError.value = false
   pendingAction.value = action
@@ -399,6 +436,33 @@ function sameIds(left: number[], right: number[]) {
     sortedLeft.length === sortedRight.length &&
     sortedLeft.every((id, index) => id === sortedRight[index])
   )
+}
+
+function collectReferencedImageIds(document: PostContentDocument): Set<number> {
+  const ids = new Set<number>()
+  collectReferencedImageIdsFromNodes(document.content ?? [], ids)
+
+  return ids
+}
+
+function collectReferencedImageIdsFromNodes(nodes: PostContentNode[], ids: Set<number>) {
+  for (const node of nodes) {
+    if (node.type === 'image' && typeof node.attrs?.postImageId === 'number') {
+      ids.add(node.attrs.postImageId)
+    }
+
+    if (node.content?.length) {
+      collectReferencedImageIdsFromNodes(node.content, ids)
+    }
+  }
+}
+
+function unusedImageDeleteMessage(error: unknown): string {
+  if (isAxiosError(error) && error.response?.status === 409) {
+    return 'Guarda primero el documento sin esta imagen antes de eliminar el archivo.'
+  }
+
+  return 'No pudimos eliminar esta imagen no utilizada. Intenta nuevamente.'
 }
 </script>
 
@@ -590,6 +654,67 @@ function sameIds(left: number[], right: number[]) {
                 :delete-image="deleteEditorImage"
               />
             </div>
+
+            <section
+              v-if="unusedImages.length || unusedImageError || unusedImageSuccess"
+              aria-labelledby="unused-images-title"
+              class="rounded-3xl border border-amber-200 bg-amber-50 p-5"
+            >
+              <h2 id="unused-images-title" class="text-sm font-black uppercase text-amber-950">
+                Imágenes no utilizadas
+              </h2>
+              <p class="mt-2 text-sm leading-6 text-amber-950/80">
+                Estas imágenes fueron subidas pero ya no aparecen en la publicación.
+              </p>
+
+              <p
+                v-if="unusedImageSuccess"
+                class="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-emerald-900"
+                role="status"
+              >
+                {{ unusedImageSuccess }}
+              </p>
+              <p
+                v-if="unusedImageError"
+                class="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-red-900"
+                role="alert"
+              >
+                {{ unusedImageError }}
+              </p>
+
+              <ul v-if="unusedImages.length" class="mt-4 grid gap-3">
+                <li
+                  v-for="image in unusedImages"
+                  :key="image.id"
+                  class="flex min-w-0 max-w-full flex-col gap-4 rounded-2xl border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div class="flex min-w-0 items-center gap-3">
+                    <img
+                      :src="image.secureUrl"
+                      :alt="image.altText"
+                      class="size-16 shrink-0 rounded-xl object-cover"
+                    />
+                    <div class="min-w-0">
+                      <p class="break-words text-sm font-black text-slate-950">
+                        {{ image.altText }}
+                      </p>
+                      <p class="mt-1 text-xs font-bold uppercase text-slate-500">
+                        {{ image.format }} · {{ image.width }}x{{ image.height }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="w-full rounded-2xl bg-red-700 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-auto"
+                    :disabled="isBusy"
+                    @click="deleteUnusedImage(image.id)"
+                  >
+                    {{ deletingUnusedImageId === image.id ? 'Eliminando...' : 'Eliminar archivo' }}
+                  </button>
+                </li>
+              </ul>
+            </section>
 
             <fieldset class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <legend class="px-2 text-sm font-black uppercase text-emerald-700">

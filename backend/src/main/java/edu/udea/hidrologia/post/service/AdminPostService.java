@@ -50,6 +50,7 @@ public class AdminPostService {
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
     private final PostContentDocumentService postContentDocumentService;
+    private final PostImageCleanupService postImageCleanupService;
     private final Clock clock;
 
     public AdminPostService(
@@ -58,12 +59,14 @@ public class AdminPostService {
             SectionRepository sectionRepository,
             TagRepository tagRepository,
             PostContentDocumentService postContentDocumentService,
+            PostImageCleanupService postImageCleanupService,
             Clock clock) {
         this.postRepository = postRepository;
         this.postImageRepository = postImageRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
         this.postContentDocumentService = postContentDocumentService;
+        this.postImageCleanupService = postImageCleanupService;
         this.clock = clock;
     }
 
@@ -136,10 +139,8 @@ public class AdminPostService {
         if (post.getStatus() != PostStatus.DRAFT || post.getSourceQuestion() != null) {
             throw new PostStateConflictException("Only manual draft posts can be discarded here");
         }
-        if (postImageRepository.existsByPostId(id)) {
-            throw new PostStateConflictException("Remove post images before discarding this draft");
-        }
 
+        postImageCleanupService.deleteAllForPost(post.getId());
         postRepository.delete(post);
     }
 
