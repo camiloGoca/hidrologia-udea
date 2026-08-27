@@ -19,7 +19,7 @@ import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
 import type { AdminPost, AdminPostImage } from '@/types/adminPost'
-import type { PostContentDocument } from '@/types/postContent'
+import type { PostContentDocument, PostContentImageDisplaySize } from '@/types/postContent'
 import type { Section } from '@/types/section'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
 
@@ -144,6 +144,90 @@ describe('AdminPostEditorView', () => {
     await flushPromises()
 
     expect(wrapper.get('article').classes()).not.toContain('overflow-hidden')
+  })
+
+  it('opens and closes a preview using the current dirty editor state without saving', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Borrador inicial',
+        content: 'Contenido inicial',
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('Título sin guardar')
+    await wrapper.find('textarea').setValue('Contenido sin guardar')
+    await wrapper.find('select').setValue('parcial-1')
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await buttonByText(wrapper, 'Vista previa').trigger('click')
+
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Vista previa')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Título sin guardar')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Contenido sin guardar')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Parcial 1')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('#Morfometría')
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
+    expect(mockedPublishAdminPost).not.toHaveBeenCalled()
+
+    await buttonByText(wrapper, 'Cerrar').trigger('click')
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('shows preview for a newly created manual draft before saving changes', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: '',
+        content: '',
+        sourceQuestionId: null,
+        sourceQuestion: null,
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('Publicación nueva sin guardar')
+    await wrapper.find('textarea').setValue('Contenido local antes del primer guardado')
+
+    await lastButtonByText(wrapper, 'Vista previa').trigger('click')
+
+    const preview = wrapper.get('[role="dialog"]')
+    expect(preview.text()).toContain('Publicación nueva sin guardar')
+    expect(preview.text()).toContain('Contenido local antes del primer guardado')
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
+    expect(mockedPublishAdminPost).not.toHaveBeenCalled()
+    expect(mockedDiscardManualAdminPost).not.toHaveBeenCalled()
+    expect(routerPush).not.toHaveBeenCalled()
+
+    await buttonByText(wrapper, 'Cerrar').trigger('click')
+
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('Publicación nueva sin guardar')
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe(
+      'Contenido local antes del primer guardado',
+    )
+  })
+
+  it('renders preview images with caption and display size through the public renderer', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        contentDocument: contentDocumentWithImage(15, 'Figura local', 'small'),
+        images: [postImage(15, 'Gráfica validada')],
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Vista previa').trigger('click')
+
+    const preview = wrapper.get('[role="dialog"]')
+    expect(preview.findComponent({ name: 'PostContentRenderer' }).exists()).toBe(true)
+    expect(preview.find('img[alt="Gráfica validada"]').exists()).toBe(true)
+    expect(preview.text()).toContain('Figura local')
+    expect(preview.find('figure').classes()).toEqual(expect.arrayContaining(['max-w-sm']))
   })
 
   it('passes post images and image callbacks to the academic editor', async () => {
@@ -783,7 +867,11 @@ function contentDocument(text: string): PostContentDocument {
   }
 }
 
-function contentDocumentWithImage(imageId: number): PostContentDocument {
+function contentDocumentWithImage(
+  imageId: number,
+  caption: string | null = null,
+  displaySize: PostContentImageDisplaySize = 'medium',
+): PostContentDocument {
   return {
     type: 'doc',
     content: [
@@ -795,7 +883,8 @@ function contentDocumentWithImage(imageId: number): PostContentDocument {
         type: 'image',
         attrs: {
           postImageId: imageId,
-          displaySize: 'medium',
+          caption,
+          displaySize,
         },
       },
     ],

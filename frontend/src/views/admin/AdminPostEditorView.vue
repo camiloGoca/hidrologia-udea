@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
 
 import AcademicPostEditor from '@/components/AcademicPostEditor.vue'
+import PostContentRenderer from '@/components/PostContentRenderer'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
@@ -49,7 +50,9 @@ const saveError = ref(false)
 const unusedImageError = ref('')
 const unusedImageSuccess = ref('')
 const successMessage = ref('')
+const isPreviewOpen = ref(false)
 const cancelButton = ref<HTMLButtonElement | null>(null)
+const previewCloseButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
 const form = reactive({
   title: '',
@@ -73,6 +76,12 @@ const displayNickname = computed(() => sourceQuestion.value?.nickname ?? 'Anóni
 const displayTitle = computed(() => post.value?.title.trim() || 'Sin título')
 const workshopSections = computed(() => sectionsByType('TALLER'))
 const examSections = computed(() => sectionsByType('PARCIAL'))
+const selectedSection = computed(
+  () => sections.value.find((section) => section.slug === form.sectionSlug) ?? post.value?.section ?? null,
+)
+const selectedTags = computed(() =>
+  availableTags.value.filter((tag) => form.tagIds.includes(tag.id)),
+)
 const isDraft = computed(() => post.value?.status === 'DRAFT')
 const isPublished = computed(() => post.value?.status === 'PUBLISHED')
 const isArchived = computed(() => post.value?.status === 'ARCHIVED')
@@ -297,6 +306,18 @@ async function openConfirmation(action: ConfirmationAction) {
   cancelButton.value?.focus()
 }
 
+async function openPreview() {
+  lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  isPreviewOpen.value = true
+  await nextTick()
+  previewCloseButton.value?.focus()
+}
+
+function closePreview() {
+  isPreviewOpen.value = false
+  lastFocusedElement?.focus()
+}
+
 function closeConfirmation() {
   if (isSubmittingAction.value) {
     return
@@ -515,6 +536,13 @@ function unusedImageDeleteMessage(error: unknown): string {
             </div>
 
             <div class="flex flex-wrap gap-3">
+              <button
+                type="button"
+                class="inline-flex rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950"
+                @click="openPreview"
+              >
+                Vista previa
+              </button>
               <RouterLink
                 v-if="isPublished"
                 :to="{ name: 'post-detail', params: { id: post.id } }"
@@ -753,6 +781,13 @@ function unusedImageDeleteMessage(error: unknown): string {
 
             <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
+                type="button"
+                class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-sky-950 shadow-sm ring-1 ring-slate-200 transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950"
+                @click="openPreview"
+              >
+                Vista previa
+              </button>
+              <button
                 type="submit"
                 class="rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950 disabled:cursor-not-allowed disabled:bg-slate-400"
                 :disabled="!canSave"
@@ -837,6 +872,63 @@ function unusedImageDeleteMessage(error: unknown): string {
           >
             {{ isSubmittingAction ? 'Procesando...' : confirmationConfig.confirmLabel }}
           </button>
+        </div>
+      </section>
+    </div>
+
+    <div
+      v-if="isPreviewOpen && post"
+      class="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="post-preview-title"
+      @keydown.esc.prevent="closePreview"
+    >
+      <section class="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-[2rem] bg-slate-50 shadow-2xl">
+        <header class="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-7">
+          <div>
+            <p class="text-xs font-black uppercase text-emerald-700">
+              Vista previa
+            </p>
+            <h2 id="post-preview-title" class="mt-1 text-2xl font-black text-slate-950">
+              {{ form.title.trim() || 'Sin título' }}
+            </h2>
+            <p class="mt-2 text-sm font-bold text-slate-600">
+              Se muestra el estado actual del editor, aunque todavía no esté guardado.
+            </p>
+          </div>
+
+          <button
+            ref="previewCloseButton"
+            type="button"
+            class="self-start rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900"
+            @click="closePreview"
+          >
+            Cerrar
+          </button>
+        </header>
+
+        <div class="min-h-0 overflow-y-auto px-5 py-6 sm:px-7">
+          <article class="mx-auto max-w-3xl">
+            <div class="mb-5 flex flex-wrap items-center gap-2 text-xs font-black uppercase">
+              <span v-if="selectedSection" class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">
+                {{ selectedSection.name }}
+              </span>
+              <span
+                v-for="tag in selectedTags"
+                :key="tag.id"
+                class="rounded-full bg-sky-100 px-3 py-1 text-sky-950"
+              >
+                #{{ tag.name }}
+              </span>
+            </div>
+
+            <PostContentRenderer
+              :document="form.contentDocument"
+              :images="post.images"
+              class="border-slate-200"
+            />
+          </article>
         </div>
       </section>
     </div>

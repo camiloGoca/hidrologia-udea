@@ -496,7 +496,7 @@ function isSafeLink(href: string): boolean {
 <template>
   <div class="mt-3 min-w-0 max-w-full rounded-3xl border border-slate-300 bg-white shadow-sm">
     <div
-      class="editor-toolbar grid gap-4 rounded-t-3xl border-b border-slate-200 bg-slate-50 p-4"
+      class="editor-toolbar flex flex-wrap items-end gap-2 rounded-t-3xl border-b border-slate-200 bg-slate-50 px-3 py-2"
       aria-label="Herramientas del editor académico"
     >
       <div class="editor-group">
@@ -520,34 +520,43 @@ function isSafeLink(href: string): boolean {
           <div class="editor-control-set">
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :aria-pressed="editor?.isActive('bold')"
               :disabled="!editor"
               title="Negrita"
               @click="editor?.chain().focus().toggleBold().run()"
             >
-              Negrita
+              <span class="editor-label-sr">Negrita</span>
+              <span aria-hidden="true">B</span>
             </button>
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :aria-pressed="editor?.isActive('italic')"
               :disabled="!editor"
               title="Cursiva"
               @click="editor?.chain().focus().toggleItalic().run()"
             >
-              Cursiva
+              <span class="editor-label-sr">Cursiva</span>
+              <span aria-hidden="true">I</span>
             </button>
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :aria-pressed="editor?.isActive('underline')"
               :disabled="!editor"
               title="Subrayado"
               @click="editor?.chain().focus().toggleUnderline().run()"
             >
-              Subrayado
+              <span class="editor-label-sr">Subrayado</span>
+              <span aria-hidden="true">U</span>
             </button>
+          </div>
+        </div>
+
+        <details class="editor-menu">
+          <summary class="editor-menu-trigger">Formato</summary>
+          <div class="editor-menu-panel">
             <button
               type="button"
               class="editor-button"
@@ -557,10 +566,8 @@ function isSafeLink(href: string): boolean {
             >
               Limpiar formato
             </button>
-          </div>
-        </div>
 
-        <div class="editor-group">
+            <div class="editor-group">
           <label class="editor-label" for="post-content-size">Tamaño</label>
           <select
             id="post-content-size"
@@ -606,6 +613,8 @@ function isSafeLink(href: string): boolean {
             <option value="important">Importante</option>
           </select>
         </div>
+          </div>
+        </details>
       </div>
 
       <div class="editor-toolbar-row">
@@ -614,24 +623,32 @@ function isSafeLink(href: string): boolean {
           <div class="editor-control-set">
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :aria-pressed="editor?.isActive('bulletList')"
               :disabled="!editor"
               title="Lista con viñetas"
               @click="editor?.chain().focus().toggleBulletList().run()"
             >
-              Lista con viñetas
+              <span class="editor-label-sr">Lista con viñetas</span>
+              <span aria-hidden="true">•</span>
             </button>
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :aria-pressed="editor?.isActive('orderedList')"
               :disabled="!editor"
               title="Lista numerada"
               @click="editor?.chain().focus().toggleOrderedList().run()"
             >
-              Lista numerada
+              <span class="editor-label-sr">Lista numerada</span>
+              <span aria-hidden="true">1.</span>
             </button>
+          </div>
+        </div>
+
+        <details class="editor-menu">
+          <summary class="editor-menu-trigger">Bloque académico</summary>
+          <div class="editor-menu-panel">
             <button
               type="button"
               class="editor-button"
@@ -642,10 +659,8 @@ function isSafeLink(href: string): boolean {
             >
               Cita
             </button>
-          </div>
-        </div>
 
-        <div class="editor-group">
+            <div class="editor-group">
           <label class="editor-label" for="post-content-academic-block">Bloque académico</label>
           <select
             id="post-content-academic-block"
@@ -660,7 +675,12 @@ function isSafeLink(href: string): boolean {
             <option value="important">Importante</option>
           </select>
         </div>
+          </div>
+        </details>
 
+        <details class="editor-menu">
+          <summary class="editor-menu-trigger">Alinear</summary>
+          <div class="editor-menu-panel">
         <div class="editor-group">
           <label class="editor-label" for="post-content-align">Alineación</label>
           <select
@@ -676,6 +696,8 @@ function isSafeLink(href: string): boolean {
             <option value="justify">Justificado</option>
           </select>
         </div>
+          </div>
+        </details>
 
         <div class="editor-group">
           <span class="editor-label">Otros</span>
@@ -700,25 +722,28 @@ function isSafeLink(href: string): boolean {
               @mousedown.prevent="openInsertImageDialog"
               @click="openInsertImageDialog"
             >
-              Insertar imagen
+              <span class="editor-label-sr">Insertar imagen</span>
+              <span aria-hidden="true">Imagen</span>
             </button>
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :disabled="!editor"
               title="Deshacer"
               @click="editor?.chain().focus().undo().run()"
             >
-              Deshacer
+              <span class="editor-label-sr">Deshacer</span>
+              <span aria-hidden="true">↶</span>
             </button>
             <button
               type="button"
-              class="editor-button"
+              class="editor-button editor-button-icon"
               :disabled="!editor"
               title="Rehacer"
               @click="editor?.chain().focus().redo().run()"
             >
-              Rehacer
+              <span class="editor-label-sr">Rehacer</span>
+              <span aria-hidden="true">↷</span>
             </button>
           </div>
         </div>
@@ -859,10 +884,7 @@ function isSafeLink(href: string): boolean {
 
 <style scoped>
 .editor-toolbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.9rem;
-  align-items: end;
+  display: contents;
   min-width: 0;
   max-width: 100%;
 }
@@ -878,13 +900,38 @@ function isSafeLink(href: string): boolean {
 
 .editor-group {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.2rem;
   min-width: 0;
   max-width: 100%;
 }
 
+.editor-toolbar > .editor-group > .editor-label,
+.editor-toolbar-row > .editor-group > .editor-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.editor-label-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .editor-label {
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -894,19 +941,80 @@ function isSafeLink(href: string): boolean {
 .editor-control-set {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.35rem;
   min-width: 0;
   max-width: 100%;
 }
 
-.editor-select,
-.editor-button {
-  min-height: 2.5rem;
+.editor-menu {
+  position: relative;
+  align-self: end;
+  min-width: 0;
+}
+
+.editor-menu > summary {
+  list-style: none;
+}
+
+.editor-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-menu-trigger {
+  display: inline-flex;
+  min-height: 2.1rem;
+  cursor: pointer;
+  align-items: center;
   border-radius: 9999px;
   border: 1px solid rgb(203 213 225);
   background: white;
-  padding: 0.55rem 0.85rem;
-  font-size: 0.8rem;
+  padding: 0.42rem 0.72rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: rgb(15 23 42);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
+}
+
+.editor-menu-trigger::after {
+  content: '▾';
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+}
+
+.editor-menu[open] .editor-menu-trigger,
+.editor-menu-trigger:hover {
+  border-color: rgb(4 120 87);
+  background: rgb(4 120 87);
+  color: white;
+}
+
+.editor-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: min(18rem, calc(100vw - 2rem));
+  gap: 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(226 232 240);
+  background: white;
+  padding: 0.8rem;
+  box-shadow: 0 18px 42px rgb(15 23 42 / 0.16);
+}
+
+.editor-select,
+.editor-button {
+  min-height: 2.1rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(203 213 225);
+  background: white;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.75rem;
   font-weight: 900;
   color: rgb(15 23 42);
   max-width: 100%;
@@ -918,12 +1026,18 @@ function isSafeLink(href: string): boolean {
 }
 
 .editor-select {
-  padding-right: 2rem;
+  min-width: 7.5rem;
+  padding-right: 1.7rem;
 }
 
 .editor-button {
   white-space: normal;
   text-align: center;
+}
+
+.editor-button:has(.editor-label-sr) {
+  min-width: 2.1rem;
+  padding-inline: 0.62rem;
 }
 
 .editor-button:hover,
@@ -941,7 +1055,8 @@ function isSafeLink(href: string): boolean {
 }
 
 .editor-button:focus-visible,
-.editor-select:focus-visible {
+.editor-select:focus-visible,
+.editor-menu-trigger:focus-visible {
   outline: 2px solid rgb(4 120 87);
   outline-offset: 3px;
 }
