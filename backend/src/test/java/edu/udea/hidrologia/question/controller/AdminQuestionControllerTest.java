@@ -205,6 +205,7 @@ class AdminQuestionControllerTest {
                         null,
                         null,
                         java.util.List.of(),
+                        java.util.List.of(),
                         NOW,
                         NOW,
                         null));

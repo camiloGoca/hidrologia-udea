@@ -11,6 +11,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import edu.udea.hidrologia.link.repository.InterestingLinkRepository;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.controller.AdminPostController;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.repository.QuestionAttachmentRepository;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
@@ -29,6 +30,9 @@ class HidrologiaApplicationTests {
 
     @MockitoBean
     private PostRepository postRepository;
+
+    @MockitoBean
+    private PostImageRepository postImageRepository;
 
     @MockitoBean
     private TagRepository tagRepository;

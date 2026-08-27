@@ -36,6 +36,7 @@ import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
@@ -57,6 +58,9 @@ class AdminPostServiceTest {
     private PostRepository postRepository;
 
     @Mock
+    private PostImageRepository postImageRepository;
+
+    @Mock
     private SectionRepository sectionRepository;
 
     @Mock
@@ -72,6 +76,7 @@ class AdminPostServiceTest {
     void setUp() {
         adminPostService = new AdminPostService(
                 postRepository,
+                postImageRepository,
                 sectionRepository,
                 tagRepository,
                 postContentDocumentService,
@@ -611,6 +616,29 @@ class AdminPostServiceTest {
         adminPostService.discardManualDraft(10L);
 
         verify(postRepository).delete(manualDraft);
+    }
+
+    @Test
+    void rejectsDiscardingManualDraftWithPostImages() {
+        Post manualDraft = new Post(
+                10L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "",
+                "",
+                PostStatus.DRAFT,
+                NOW,
+                NOW,
+                null,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(10L)).thenReturn(Optional.of(manualDraft));
+        when(postImageRepository.existsByPostId(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> adminPostService.discardManualDraft(10L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Remove post images before discarding this draft");
+
+        verify(postRepository, never()).delete(manualDraft);
     }
 
     @Test

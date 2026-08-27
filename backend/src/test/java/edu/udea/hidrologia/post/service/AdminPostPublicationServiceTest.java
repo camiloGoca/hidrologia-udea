@@ -25,6 +25,7 @@ import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -44,6 +45,9 @@ class AdminPostPublicationServiceTest {
     private PostRepository postRepository;
 
     @Mock
+    private PostImageRepository postImageRepository;
+
+    @Mock
     private SectionRepository sectionRepository;
 
     @Mock
@@ -55,6 +59,7 @@ class AdminPostPublicationServiceTest {
     void setUp() {
         AdminPostService adminPostService = new AdminPostService(
                 postRepository,
+                postImageRepository,
                 sectionRepository,
                 tagRepository,
                 new PostContentDocumentService(JsonMapper.builder().build()),

@@ -1,6 +1,7 @@
 package edu.udea.hidrologia.shared.cloudinary;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -10,7 +11,9 @@ import com.cloudinary.utils.ObjectUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
+import edu.udea.hidrologia.shared.storage.ImageDeletionResult;
 import edu.udea.hidrologia.shared.storage.ImageStorageException;
+import edu.udea.hidrologia.shared.storage.ImageStorageRequest;
 import edu.udea.hidrologia.shared.storage.ImageStorageService;
 import edu.udea.hidrologia.shared.storage.ImageUpload;
 import edu.udea.hidrologia.shared.storage.StoredImage;
@@ -30,11 +33,16 @@ public class CloudinaryImageStorageService implements ImageStorageService {
 
     @Override
     public StoredImage upload(ImageUpload image) {
-        String publicId = "question-" + UUID.randomUUID();
+        return upload(image, new ImageStorageRequest(QUESTIONS_FOLDER, "question"));
+    }
+
+    @Override
+    public StoredImage upload(ImageUpload image, ImageStorageRequest request) {
+        String publicId = request.publicIdPrefix() + "-" + UUID.randomUUID();
 
         try {
             Map<?, ?> result = cloudinary.uploader().upload(image.content(), ObjectUtils.asMap(
-                    "folder", QUESTIONS_FOLDER,
+                    "folder", request.folder(),
                     "public_id", publicId,
                     "overwrite", false,
                     "resource_type", "image",
@@ -45,7 +53,7 @@ public class CloudinaryImageStorageService implements ImageStorageService {
             return new StoredImage(
                     stringValue(result, "public_id"),
                     stringValue(result, "secure_url"),
-                    stringValue(result, "format"),
+                    imageFormat(result),
                     intValue(result, "width"),
                     intValue(result, "height"),
                     longValue(result, "bytes"));
@@ -55,9 +63,21 @@ public class CloudinaryImageStorageService implements ImageStorageService {
     }
 
     @Override
-    public void delete(String publicId) {
+    public ImageDeletionResult delete(String publicId) {
         try {
-            cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+            Map<?, ?> result = cloudinary.uploader()
+                    .destroy(publicId, ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+            String deletionResult = stringValue(result, "result");
+            if ("ok".equals(deletionResult)) {
+                return ImageDeletionResult.DELETED;
+            }
+            if ("not found".equals(deletionResult)) {
+                return ImageDeletionResult.NOT_FOUND;
+            }
+
+            throw new ImageStorageException(
+                    "Image storage deletion could not be verified",
+                    new IllegalStateException("Unexpected Cloudinary deletion result"));
         } catch (IOException exception) {
             throw new ImageStorageException("Image storage is temporarily unavailable", exception);
         }
@@ -67,6 +87,20 @@ public class CloudinaryImageStorageService implements ImageStorageService {
         Object value = result.get(key);
 
         return value == null ? "" : value.toString();
+    }
+
+    private String imageFormat(Map<?, ?> result) {
+        String format = stringValue(result, "format").toLowerCase(Locale.ROOT);
+        if ("jpeg".equals(format)) {
+            return "jpg";
+        }
+        if ("jpg".equals(format) || "png".equals(format)) {
+            return format;
+        }
+
+        throw new ImageStorageException(
+                "Image storage returned an unsupported image format",
+                new IllegalStateException("Unsupported image format"));
     }
 
     private int intValue(Map<?, ?> result, String key) {

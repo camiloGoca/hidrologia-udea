@@ -25,8 +25,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.post.service.AdminPostService;
+import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
@@ -46,6 +48,9 @@ class AdminQuestionDraftServiceTest {
     private PostRepository postRepository;
 
     @Mock
+    private PostImageRepository postImageRepository;
+
+    @Mock
     private AdminPostService adminPostService;
 
     private AdminQuestionDraftService adminQuestionDraftService;
@@ -55,6 +60,7 @@ class AdminQuestionDraftServiceTest {
         adminQuestionDraftService = new AdminQuestionDraftService(
                 studentQuestionRepository,
                 postRepository,
+                postImageRepository,
                 adminPostService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -140,6 +146,7 @@ class AdminQuestionDraftServiceTest {
     void discardsDraftWithoutDeletingQuestionOrAttachment() {
         StudentQuestion question = withAttachment(question(StudentQuestionStatus.PENDING));
         Post draft = Post.createQuestionDraft(question, NOW);
+        ReflectionTestUtils.setField(draft, "id", 9L);
         when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
         when(postRepository.findBySourceQuestionId(1L)).thenReturn(Optional.of(draft));
 
@@ -148,6 +155,20 @@ class AdminQuestionDraftServiceTest {
         verify(postRepository).delete(draft);
         assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PENDING);
         assertThat(question.getAttachment()).isNotNull();
+    }
+
+    @Test
+    void rejectsDiscardWhenQuestionDraftHasPostImages() {
+        StudentQuestion question = question(StudentQuestionStatus.PENDING);
+        Post draft = Post.createQuestionDraft(question, NOW);
+        ReflectionTestUtils.setField(draft, "id", 9L);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(postRepository.findBySourceQuestionId(1L)).thenReturn(Optional.of(draft));
+        when(postImageRepository.existsByPostId(9L)).thenReturn(true);
+
+        assertThatThrownBy(() -> adminQuestionDraftService.discardDraft(1L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Remove post images before discarding this draft");
     }
 
     @Test
@@ -203,6 +224,7 @@ class AdminQuestionDraftServiceTest {
                 1L,
                 null,
                 null,
+                java.util.List.of(),
                 java.util.List.of(),
                 NOW,
                 NOW,

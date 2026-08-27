@@ -203,6 +203,7 @@ class AdminPostControllerTest {
                         section(),
                         sourceQuestion(),
                         List.of(new AdminPostTagResponse(1L, "Morfometría", "morfometria")),
+                        List.of(),
                         NOW,
                         NOW,
                         NOW));
@@ -448,6 +449,7 @@ class AdminPostControllerTest {
                 section(),
                 sourceQuestion(),
                 List.of(),
+                List.of(),
                 NOW,
                 NOW,
                 null);
@@ -463,6 +465,7 @@ class AdminPostControllerTest {
                 null,
                 section(),
                 null,
+                List.of(),
                 List.of(),
                 NOW,
                 NOW,
@@ -480,6 +483,7 @@ class AdminPostControllerTest {
                 section(),
                 sourceQuestion(),
                 List.of(),
+                List.of(),
                 NOW,
                 NOW,
                 NOW);
@@ -495,6 +499,7 @@ class AdminPostControllerTest {
                 1L,
                 section(),
                 sourceQuestion(),
+                List.of(),
                 List.of(),
                 NOW,
                 NOW,

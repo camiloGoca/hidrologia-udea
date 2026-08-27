@@ -16,6 +16,7 @@ public record AdminPostResponse(
         PostSectionResponse section,
         AdminPostSourceQuestionResponse sourceQuestion,
         List<AdminPostTagResponse> tags,
+        List<AdminPostImageResponse> images,
         Instant createdAt,
         Instant updatedAt,
         Instant publishedAt) {

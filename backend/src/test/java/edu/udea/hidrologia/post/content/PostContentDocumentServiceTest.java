@@ -363,6 +363,26 @@ class PostContentDocumentServiceTest {
     }
 
     @Test
+    void detectsFutureImageReferencesWithoutAllowingImageNodesYet() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "image",
+                      "attrs": { "postImageId": 15 }
+                    }
+                  ]
+                }
+                """);
+
+        assertThat(service.referencesPostImageId(document, 15L)).isTrue();
+        assertThat(service.referencesPostImageId(document, 16L)).isFalse();
+        assertThatThrownBy(() -> service.validate(document))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
     void rejectsUnknownMarks() throws Exception {
         Map<String, Object> document = json("""
                 {

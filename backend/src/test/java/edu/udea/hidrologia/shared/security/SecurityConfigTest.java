@@ -30,11 +30,13 @@ import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
+import edu.udea.hidrologia.post.dto.AdminPostImageResponse;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
 import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
+import edu.udea.hidrologia.post.service.AdminPostImageService;
 import edu.udea.hidrologia.post.service.AdminPostService;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.question.dto.CreateStudentQuestionResponse;
@@ -81,6 +83,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminPostPublicationService adminPostPublicationService;
+
+    @MockitoBean
+    private AdminPostImageService adminPostImageService;
 
     @MockitoBean
     private AdminTagService adminTagService;
@@ -393,6 +398,7 @@ class SecurityConfigTest {
                         null,
                         null,
                         List.of(),
+                        List.of(),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         null));
@@ -406,6 +412,7 @@ class SecurityConfigTest {
                         1L,
                         null,
                         null,
+                        List.of(),
                         List.of(),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
@@ -545,6 +552,7 @@ class SecurityConfigTest {
                         null,
                         null,
                         List.of(),
+                        List.of(),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
                         null));
@@ -590,6 +598,124 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/posts/9/restore")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void protectsAdminPostImageEndpointsWithoutToken() throws Exception {
+        mockMvc.perform(multipart("/api/v1/admin/posts/9/images")
+                .file(new MockMultipartFile("file", "image.png", "image/png", new byte[] {1, 2, 3}))
+                .param("altText", "Imagen"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9/images/15")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "altText": "Imagen"
+                        }
+                        """))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9/images/15"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsUnauthorizedForInvalidTokenOnAdminPostImageEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("invalid-token")))
+                .thenThrow(new FirebaseTokenVerificationException("Invalid token", new RuntimeException()));
+
+        mockMvc.perform(multipart("/api/v1/admin/posts/9/images")
+                .file(new MockMultipartFile("file", "image.png", "image/png", new byte[] {1, 2, 3}))
+                .param("altText", "Imagen")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer invalid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "altText": "Imagen"
+                        }
+                        """))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminPostImageEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(multipart("/api/v1/admin/posts/9/images")
+                .file(new MockMultipartFile("file", "image.png", "image/png", new byte[] {1, 2, 3}))
+                .param("altText", "Imagen")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "altText": "Imagen"
+                        }
+                        """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAdminUidOnAdminPostImageEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+        when(adminPostImageService.upload(eq(9L), any(), eq("Imagen")))
+                .thenReturn(new AdminPostImageResponse(
+                        15L,
+                        "https://res.cloudinary.com/demo/image/upload/post.png",
+                        "png",
+                        800,
+                        600,
+                        1000L,
+                        "Imagen",
+                        Instant.parse("2026-01-01T00:00:00Z")));
+        when(adminPostImageService.updateAltText(eq(9L), eq(15L), any()))
+                .thenReturn(new AdminPostImageResponse(
+                        15L,
+                        "https://res.cloudinary.com/demo/image/upload/post.png",
+                        "png",
+                        800,
+                        600,
+                        1000L,
+                        "Imagen actualizada",
+                        Instant.parse("2026-01-01T00:00:00Z")));
+
+        mockMvc.perform(multipart("/api/v1/admin/posts/9/images")
+                .file(new MockMultipartFile("file", "image.png", "image/png", new byte[] {1, 2, 3}))
+                .param("altText", "Imagen")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(patch("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "altText": "Imagen actualizada"
+                        }
+                        """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9/images/15")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
     }
 
     @Test

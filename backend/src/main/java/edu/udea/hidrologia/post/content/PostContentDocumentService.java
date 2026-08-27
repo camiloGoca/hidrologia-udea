@@ -105,6 +105,14 @@ public class PostContentDocumentService {
         return toSerializableDocument(validateJson(jsonMapper.valueToTree(value)));
     }
 
+    public boolean referencesPostImageId(Map<String, Object> document, Long postImageId) {
+        if (document == null || postImageId == null) {
+            return false;
+        }
+
+        return referencesPostImageIdValue(document, postImageId);
+    }
+
     private JsonNode validateJson(JsonNode document) {
         if (document == null || !document.isObject()) {
             throw invalid();
@@ -433,6 +441,33 @@ public class PostContentDocumentService {
         } catch (URISyntaxException exception) {
             return false;
         }
+    }
+
+    private boolean referencesPostImageIdValue(Object value, Long postImageId) {
+        if (value instanceof Map<?, ?> map) {
+            Object type = map.get("type");
+            Object attrs = map.get("attrs");
+            if ("image".equals(type) && attrs instanceof Map<?, ?> imageAttrs
+                    && numericValueEquals(imageAttrs.get("postImageId"), postImageId)) {
+                return true;
+            }
+
+            return map.values().stream().anyMatch(child -> referencesPostImageIdValue(child, postImageId));
+        }
+
+        if (value instanceof List<?> list) {
+            return list.stream().anyMatch(child -> referencesPostImageIdValue(child, postImageId));
+        }
+
+        return false;
+    }
+
+    private boolean numericValueEquals(Object value, Long expected) {
+        if (value instanceof Number number) {
+            return number.longValue() == expected && Double.compare(number.doubleValue(), expected.doubleValue()) == 0;
+        }
+
+        return false;
     }
 
     private String textValue(JsonNode node) {

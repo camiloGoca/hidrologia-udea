@@ -10,8 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.post.service.AdminPostService;
+import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
@@ -22,16 +24,19 @@ public class AdminQuestionDraftService {
 
     private final StudentQuestionRepository studentQuestionRepository;
     private final PostRepository postRepository;
+    private final PostImageRepository postImageRepository;
     private final AdminPostService adminPostService;
     private final Clock clock;
 
     public AdminQuestionDraftService(
             StudentQuestionRepository studentQuestionRepository,
             PostRepository postRepository,
+            PostImageRepository postImageRepository,
             AdminPostService adminPostService,
             Clock clock) {
         this.studentQuestionRepository = studentQuestionRepository;
         this.postRepository = postRepository;
+        this.postImageRepository = postImageRepository;
         this.adminPostService = adminPostService;
         this.clock = clock;
     }
@@ -69,6 +74,9 @@ public class AdminQuestionDraftService {
 
         if (draft.getStatus() != PostStatus.DRAFT) {
             throw new QuestionDraftConflictException("Only draft posts can be discarded");
+        }
+        if (postImageRepository.existsByPostId(draft.getId())) {
+            throw new PostStateConflictException("Remove post images before discarding this draft");
         }
 
         postRepository.delete(draft);

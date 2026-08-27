@@ -17,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
+import edu.udea.hidrologia.post.dto.AdminPostImageResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSourceQuestionResponse;
 import edu.udea.hidrologia.post.dto.AdminPostSummaryResponse;
 import edu.udea.hidrologia.post.dto.AdminPostTagResponse;
@@ -25,7 +26,9 @@ import edu.udea.hidrologia.post.dto.CreatePostRequest;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.UpdatePostRequest;
 import edu.udea.hidrologia.post.entity.Post;
+import edu.udea.hidrologia.post.entity.PostImage;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.section.entity.Section;
@@ -43,6 +46,7 @@ public class AdminPostService {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final PostRepository postRepository;
+    private final PostImageRepository postImageRepository;
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
     private final PostContentDocumentService postContentDocumentService;
@@ -50,11 +54,13 @@ public class AdminPostService {
 
     public AdminPostService(
             PostRepository postRepository,
+            PostImageRepository postImageRepository,
             SectionRepository sectionRepository,
             TagRepository tagRepository,
             PostContentDocumentService postContentDocumentService,
             Clock clock) {
         this.postRepository = postRepository;
+        this.postImageRepository = postImageRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
         this.postContentDocumentService = postContentDocumentService;
@@ -128,6 +134,9 @@ public class AdminPostService {
         if (post.getStatus() != PostStatus.DRAFT || post.getSourceQuestion() != null) {
             throw new PostStateConflictException("Only manual draft posts can be discarded here");
         }
+        if (postImageRepository.existsByPostId(id)) {
+            throw new PostStateConflictException("Remove post images before discarding this draft");
+        }
 
         postRepository.delete(post);
     }
@@ -145,6 +154,7 @@ public class AdminPostService {
                 toSectionResponse(post.getSection()),
                 sourceQuestion == null ? null : toSourceQuestionResponse(sourceQuestion),
                 toTagResponses(post),
+                toImageResponses(post),
                 post.getCreatedAt(),
                 post.getUpdatedAt(),
                 post.getPublishedAt());
@@ -229,6 +239,29 @@ public class AdminPostService {
                 .sorted(Comparator.comparing(Tag::getName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(Tag::getSlug))
                 .map(tag -> new AdminPostTagResponse(tag.getId(), tag.getName(), tag.getSlug()))
+                .toList();
+    }
+
+    private List<AdminPostImageResponse> toImageResponses(Post post) {
+        if (post.getId() == null) {
+            return List.of();
+        }
+
+        List<PostImage> images = postImageRepository.findByPostIdOrderById(post.getId());
+        if (images == null) {
+            return List.of();
+        }
+
+        return images.stream()
+                .map(image -> new AdminPostImageResponse(
+                        image.getId(),
+                        image.getSecureUrl(),
+                        image.getFormat(),
+                        image.getWidth(),
+                        image.getHeight(),
+                        image.getBytes(),
+                        image.getAltText(),
+                        image.getCreatedAt()))
                 .toList();
     }
 }

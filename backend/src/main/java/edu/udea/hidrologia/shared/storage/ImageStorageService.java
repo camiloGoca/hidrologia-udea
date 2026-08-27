@@ -4,5 +4,7 @@ public interface ImageStorageService {
 
     StoredImage upload(ImageUpload image);
 
-    void delete(String publicId);
+    StoredImage upload(ImageUpload image, ImageStorageRequest request);
+
+    ImageDeletionResult delete(String publicId);
 }
