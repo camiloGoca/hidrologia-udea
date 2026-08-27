@@ -2,6 +2,7 @@ import { adminHttpClient } from './adminHttpClient'
 
 import type {
   AdminPost,
+  AdminPostImage,
   AdminPostsResponse,
   AdminPostStatus,
   CreateAdminPostRequest,
@@ -39,6 +40,39 @@ export async function updateAdminPost(
   const response = await adminHttpClient.patch<AdminPost>(`/admin/posts/${postId}`, payload)
 
   return response.data
+}
+
+export async function uploadAdminPostImage(
+  postId: number,
+  payload: { file: File; altText: string },
+): Promise<AdminPostImage> {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+  formData.append('altText', payload.altText)
+
+  const response = await adminHttpClient.post<AdminPostImage>(
+    `/admin/posts/${postId}/images`,
+    formData,
+  )
+
+  return response.data
+}
+
+export async function updateAdminPostImageAltText(
+  postId: number,
+  imageId: number,
+  altText: string,
+): Promise<AdminPostImage> {
+  const response = await adminHttpClient.patch<AdminPostImage>(
+    `/admin/posts/${postId}/images/${imageId}`,
+    { altText },
+  )
+
+  return response.data
+}
+
+export async function deleteAdminPostImage(postId: number, imageId: number): Promise<void> {
+  await adminHttpClient.delete(`/admin/posts/${postId}/images/${imageId}`)
 }
 
 export async function publishAdminPost(postId: number): Promise<AdminPost> {

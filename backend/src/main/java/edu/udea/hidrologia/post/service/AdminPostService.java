@@ -115,8 +115,10 @@ public class AdminPostService {
         String title = normalize(request.title());
         Map<String, Object> contentDocument = postContentDocumentService.validate(request.contentDocument());
         String content = postContentDocumentService.extractPlainText(contentDocument);
+        Set<Long> referencedImageIds = postContentDocumentService.referencedPostImageIds(contentDocument);
         validateEditableContent(post, title, content);
         List<Tag> tags = resolveTags(request.tagIds());
+        validateImageOwnership(post.getId(), referencedImageIds);
         Instant now = Instant.now(clock);
         post.update(title, content, contentDocument, section, now);
         if (request.tagIds() != null) {
@@ -213,6 +215,17 @@ public class AdminPostService {
         }
 
         return tags;
+    }
+
+    private void validateImageOwnership(Long postId, Set<Long> referencedImageIds) {
+        if (referencedImageIds.isEmpty()) {
+            return;
+        }
+
+        long ownedImages = postImageRepository.countByPostIdAndIdIn(postId, referencedImageIds);
+        if (ownedImages != referencedImageIds.size()) {
+            throw new InvalidPostPublicationException("Una o mas imagenes seleccionadas no existen.");
+        }
     }
 
     private AdminPostSourceQuestionResponse toSourceQuestionResponse(StudentQuestion question) {

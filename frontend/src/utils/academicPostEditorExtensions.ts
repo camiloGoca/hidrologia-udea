@@ -2,14 +2,31 @@ import { Extension, Mark, mergeAttributes, Node, type CommandProps, type Extensi
 import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
 import StarterKit from '@tiptap/starter-kit'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
+import type { Component } from 'vue'
 
+import AcademicImageNodeView from '@/components/AcademicImageNodeView.vue'
 import type {
   PostContentAcademicBlockKind,
   PostContentHighlightKind,
+  PostContentImageDisplaySize,
   PostContentTextAlign,
   PostContentTextColor,
   PostContentTextSize,
 } from '@/types/postContent'
+
+export interface AcademicEditorImageMetadata {
+  id: number
+  secureUrl: string
+  width: number
+  height: number
+  altText: string
+}
+
+export interface AcademicEditorOptions {
+  getImageById?: (id: number) => AcademicEditorImageMetadata | undefined
+  onEditImage?: (id: number, position: number) => void
+}
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -31,6 +48,13 @@ declare module '@tiptap/core' {
     academicTextSize: {
       setAcademicTextSize: (size: PostContentTextSize) => ReturnType
       unsetAcademicTextSize: () => ReturnType
+    }
+    postImage: {
+      insertPostImage: (attrs: {
+        postImageId: number
+        caption?: string | null
+        displaySize?: PostContentImageDisplaySize
+      }) => ReturnType
     }
   }
 }
@@ -214,7 +238,71 @@ const AcademicBlock = Node.create({
   },
 })
 
-export function createAcademicPostEditorExtensions(): Extensions {
+const PostImageNode = Node.create<AcademicEditorOptions>({
+  name: 'image',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addOptions() {
+    return {
+      getImageById: undefined,
+      onEditImage: undefined,
+    }
+  },
+
+  addAttributes() {
+    return {
+      postImageId: {
+        default: null,
+        parseHTML: (element) => Number(element.getAttribute('data-post-image-id')),
+        renderHTML: (attributes) => ({ 'data-post-image-id': String(attributes.postImageId) }),
+      },
+      caption: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-caption'),
+        renderHTML: (attributes) =>
+          attributes.caption ? { 'data-caption': String(attributes.caption) } : {},
+      },
+      displaySize: {
+        default: 'medium',
+        parseHTML: (element) => element.getAttribute('data-display-size') ?? 'medium',
+        renderHTML: (attributes) => ({ 'data-display-size': attributes.displaySize ?? 'medium' }),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'figure[data-post-image-id]' }]
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['figure', mergeAttributes(HTMLAttributes)]
+  },
+
+  addCommands() {
+    return {
+      insertPostImage:
+        (attrs) =>
+        ({ commands }) =>
+          commands.insertContent({
+            type: this.name,
+            attrs: {
+              postImageId: attrs.postImageId,
+              caption: attrs.caption ?? null,
+              displaySize: attrs.displaySize ?? 'medium',
+            },
+          }),
+    }
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(AcademicImageNodeView as Component)
+  },
+})
+
+export function createAcademicPostEditorExtensions(options: AcademicEditorOptions = {}): Extensions {
   return [
     StarterKit.configure({
       code: false,
@@ -234,6 +322,7 @@ export function createAcademicPostEditorExtensions(): Extensions {
     AcademicTextColor,
     AcademicTextHighlight,
     AcademicBlock,
+    PostImageNode.configure(options),
     Underline,
     Link.configure({
       openOnClick: false,

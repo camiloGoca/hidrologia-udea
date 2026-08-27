@@ -3,10 +3,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 
+import type { AdminPostImage } from '@/types/adminPost'
 import type {
   PostContentAcademicBlockKind,
   PostContentDocument,
   PostContentHighlightKind,
+  PostContentImageDisplaySize,
   PostContentTextAlign,
   PostContentTextColor,
   PostContentTextSize,
@@ -17,10 +19,15 @@ import { createAcademicPostEditorExtensions } from '@/utils/academicPostEditorEx
 type BlockOption = 'paragraph' | 'heading2' | 'heading3'
 type HighlightOption = 'none' | PostContentHighlightKind
 type AcademicBlockOption = 'none' | PostContentAcademicBlockKind
+type ImageDialogMode = 'insert' | 'edit'
 
 const props = defineProps<{
   id: string
   modelValue: PostContentDocument
+  images?: AdminPostImage[]
+  uploadImage?: (file: File, altText: string) => Promise<AdminPostImage>
+  updateImageAltText?: (imageId: number, altText: string) => Promise<AdminPostImage>
+  deleteImage?: (imageId: number) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -33,12 +40,28 @@ const isLinkFormOpen = ref(false)
 const linkHref = ref('')
 const linkError = ref('')
 const linkInput = ref<HTMLInputElement | null>(null)
+const isImageDialogOpen = ref(false)
+const imageDialogMode = ref<ImageDialogMode>('insert')
+const imageFile = ref<File | null>(null)
+const imageAltText = ref('')
+const imageCaption = ref('')
+const imageDisplaySize = ref<PostContentImageDisplaySize>('medium')
+const imageError = ref('')
+const isImageSubmitting = ref(false)
+const imageFileInput = ref<HTMLInputElement | null>(null)
+const imageAltInput = ref<HTMLInputElement | null>(null)
+let savedImageSelection: { from: number; to: number } | null = null
+let selectedImagePosition: number | null = null
+let selectedImageId: number | null = null
 let isApplyingExternalContent = false
 let lastEmittedContent = ''
 
 const editor = useEditor({
   content: props.modelValue ?? emptyPostContentDocument(),
-  extensions: createAcademicPostEditorExtensions(),
+  extensions: createAcademicPostEditorExtensions({
+    getImageById,
+    onEditImage: openEditImageDialog,
+  }),
   editorProps: {
     attributes: {
       id: props.id,
@@ -241,6 +264,203 @@ function removeLink() {
 
 function clearInlineFormatting() {
   editor.value?.chain().focus().unsetAllMarks().run()
+}
+
+async function openInsertImageDialog() {
+  if (!editor.value || !props.uploadImage) {
+    return
+  }
+
+  savedImageSelection = {
+    from: editor.value.state.selection.from,
+    to: editor.value.state.selection.to,
+  }
+  imageDialogMode.value = 'insert'
+  selectedImageId = null
+  selectedImagePosition = null
+  imageFile.value = null
+  imageAltText.value = ''
+  imageCaption.value = ''
+  imageDisplaySize.value = 'medium'
+  imageError.value = ''
+  isImageDialogOpen.value = true
+  await nextTick()
+  imageFileInput.value?.focus()
+}
+
+async function openEditImageDialog(imageId: number, position: number) {
+  const image = getImageById(imageId)
+  const currentNode = editor.value?.state.doc.nodeAt(position)
+  if (!image || !currentNode) {
+    return
+  }
+
+  imageDialogMode.value = 'edit'
+  selectedImageId = imageId
+  selectedImagePosition = position
+  savedImageSelection = null
+  imageFile.value = null
+  imageAltText.value = image.altText
+  imageCaption.value = (currentNode.attrs.caption as string | null | undefined) ?? ''
+  imageDisplaySize.value = (currentNode.attrs.displaySize as PostContentImageDisplaySize | undefined) ?? 'medium'
+  imageError.value = ''
+  isImageDialogOpen.value = true
+  editor.value?.commands.setNodeSelection(position)
+  await nextTick()
+  imageAltInput.value?.focus()
+}
+
+function closeImageDialog() {
+  if (isImageSubmitting.value) {
+    return
+  }
+
+  finishImageDialog()
+}
+
+function finishImageDialog() {
+  isImageDialogOpen.value = false
+  imageError.value = ''
+  imageFile.value = null
+}
+
+function selectImageFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  imageFile.value = input.files?.[0] ?? null
+}
+
+async function submitImageDialog() {
+  if (isImageSubmitting.value) {
+    return
+  }
+
+  imageError.value = ''
+  const normalizedAltText = imageAltText.value.trim()
+  const normalizedCaption = imageCaption.value.trim()
+  const validationError = validateImageForm(normalizedAltText, normalizedCaption)
+  if (validationError) {
+    imageError.value = validationError
+    return
+  }
+
+  isImageSubmitting.value = true
+  try {
+    if (imageDialogMode.value === 'insert') {
+      await uploadAndInsertImage(normalizedAltText, normalizedCaption)
+    } else {
+      await updateSelectedImage(normalizedAltText, normalizedCaption, imageDisplaySize.value)
+    }
+    finishImageDialog()
+  } catch {
+    if (!imageError.value) {
+      imageError.value =
+        imageDialogMode.value === 'insert'
+          ? 'No pudimos insertar la imagen. Intenta nuevamente.'
+          : 'No pudimos actualizar la imagen. Intenta nuevamente.'
+    }
+  } finally {
+    isImageSubmitting.value = false
+  }
+}
+
+async function uploadAndInsertImage(altText: string, caption: string) {
+  if (!props.uploadImage || !imageFile.value || !editor.value) {
+    return
+  }
+
+  const uploadedImage = await props.uploadImage(imageFile.value, altText)
+  const chain = restoreSavedImageSelection()
+  if (!chain) {
+    await compensateUninsertedImage(uploadedImage.id)
+    throw new Error('Image editor is not available')
+  }
+
+  const inserted = chain
+    .insertPostImage({
+      postImageId: uploadedImage.id,
+      caption: caption || null,
+      displaySize: imageDisplaySize.value,
+    })
+    .run()
+
+  if (!inserted) {
+    await compensateUninsertedImage(uploadedImage.id)
+    throw new Error('Image node could not be inserted')
+  }
+}
+
+async function updateSelectedImage(
+  altText: string,
+  caption: string,
+  displaySize: PostContentImageDisplaySize,
+) {
+  if (!editor.value || selectedImageId == null || selectedImagePosition == null) {
+    return
+  }
+
+  const image = getImageById(selectedImageId)
+  if (image && image.altText !== altText) {
+    await props.updateImageAltText?.(selectedImageId, altText)
+  }
+
+  editor.value
+    .chain()
+    .focus()
+    .setNodeSelection(selectedImagePosition)
+    .updateAttributes('image', { caption: caption || null, displaySize })
+    .run()
+}
+
+function restoreSavedImageSelection() {
+  const currentEditor = editor.value
+  if (!currentEditor || !savedImageSelection) {
+    return currentEditor?.chain().focus()
+  }
+
+  const maxPosition = currentEditor.state.doc.content.size
+  const from = Math.min(savedImageSelection.from, maxPosition)
+  const to = Math.min(savedImageSelection.to, maxPosition)
+
+  return currentEditor.chain().focus().setTextSelection({ from, to })
+}
+
+async function compensateUninsertedImage(imageId: number) {
+  try {
+    await props.deleteImage?.(imageId)
+  } catch {
+    imageError.value =
+      'La imagen se subió, pero no se pudo insertar ni limpiar automáticamente. Guarda el contenido actual y revisa la imagen en esta publicación.'
+  }
+}
+
+function validateImageForm(altText: string, caption: string): string {
+  if (imageDialogMode.value === 'insert') {
+    if (!imageFile.value) {
+      return 'Selecciona una imagen JPEG o PNG.'
+    }
+    if (!['image/jpeg', 'image/png'].includes(imageFile.value.type)) {
+      return 'La imagen debe estar en formato JPEG o PNG.'
+    }
+    if (imageFile.value.size > 5 * 1024 * 1024) {
+      return 'La imagen no debe superar 5 MB.'
+    }
+  }
+
+  if (!altText) {
+    return 'El texto alternativo es obligatorio.'
+  }
+  if (altText.length > 180) {
+    return 'El texto alternativo no debe superar 180 caracteres.'
+  }
+  if (caption.length > 240) {
+    return 'El pie de imagen no debe superar 240 caracteres.'
+  }
+
+  return ''
+}
+
+function getImageById(id: number) {
+  return props.images?.find((image) => image.id === id)
 }
 
 function refreshEditorState(currentEditor: Editor) {
@@ -474,6 +694,17 @@ function isSafeLink(href: string): boolean {
             <button
               type="button"
               class="editor-button"
+              :aria-pressed="isImageDialogOpen"
+              :disabled="!editor || !uploadImage"
+              title="Insertar imagen"
+              @mousedown.prevent="openInsertImageDialog"
+              @click="openInsertImageDialog"
+            >
+              Insertar imagen
+            </button>
+            <button
+              type="button"
+              class="editor-button"
               :disabled="!editor"
               title="Deshacer"
               @click="editor?.chain().focus().undo().run()"
@@ -523,6 +754,94 @@ function isSafeLink(href: string): boolean {
           Aplicar
         </button>
         <button type="button" class="editor-button" @click="removeLink">Quitar enlace</button>
+      </div>
+
+      <div
+        v-if="isImageDialogOpen"
+        class="grid gap-4 rounded-2xl border border-emerald-100 bg-white p-4"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="post-content-image-title"
+      >
+        <h3 id="post-content-image-title" class="text-base font-black text-slate-950">
+          {{ imageDialogMode === 'insert' ? 'Insertar imagen' : 'Editar imagen' }}
+        </h3>
+
+        <div v-if="imageDialogMode === 'insert'">
+          <label class="editor-label" for="post-content-image-file">Archivo</label>
+          <input
+            id="post-content-image-file"
+            ref="imageFileInput"
+            type="file"
+            accept="image/jpeg,image/png"
+            class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+            @change="selectImageFile"
+          />
+        </div>
+
+        <div>
+          <label class="editor-label" for="post-content-image-alt">Texto alternativo</label>
+          <input
+            id="post-content-image-alt"
+            ref="imageAltInput"
+            v-model="imageAltText"
+            type="text"
+            maxlength="180"
+            class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+            placeholder="Describe la imagen para accesibilidad"
+          />
+        </div>
+
+        <div>
+          <label class="editor-label" for="post-content-image-caption">Pie de imagen</label>
+          <textarea
+            id="post-content-image-caption"
+            v-model="imageCaption"
+            maxlength="240"
+            rows="3"
+            class="mt-2 w-full resize-y rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+            placeholder="Texto opcional para acompañar la figura"
+          />
+          <p class="mt-2 text-xs font-bold text-slate-600">
+            {{ imageCaption.trim().length }}/240
+          </p>
+        </div>
+
+        <div>
+          <label class="editor-label" for="post-content-image-display-size">Tamaño visual</label>
+          <select
+            id="post-content-image-display-size"
+            v-model="imageDisplaySize"
+            class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="small">Pequeña</option>
+            <option value="medium">Mediana</option>
+            <option value="large">Grande</option>
+          </select>
+        </div>
+
+        <p v-if="imageError" class="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900" role="alert">
+          {{ imageError }}
+        </p>
+
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            class="editor-button"
+            :disabled="isImageSubmitting"
+            @click="closeImageDialog"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="editor-button editor-button-primary"
+            :disabled="isImageSubmitting"
+            @click="submitImageDialog"
+          >
+            {{ isImageSubmitting ? 'Procesando...' : imageDialogMode === 'insert' ? 'Insertar imagen' : 'Guardar imagen' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -754,5 +1073,80 @@ function isSafeLink(href: string): boolean {
 
 :deep(.ProseMirror [data-highlight-kind='important']) {
   background: rgb(254 226 226);
+}
+
+:deep(.editor-image-node) {
+  position: relative;
+  margin: 1.5rem auto;
+  width: fit-content;
+  max-width: min(100%, 40rem);
+  border-radius: 1.5rem;
+  border: 1px solid rgb(203 213 225);
+  background: rgb(248 250 252);
+  padding: 0.75rem;
+}
+
+:deep(.editor-image-node[data-display-size='small']) {
+  max-width: min(100%, 22.5rem);
+}
+
+:deep(.editor-image-node[data-display-size='large']) {
+  width: 100%;
+  max-width: 100%;
+}
+
+:deep(.editor-image-node-selected) {
+  border-color: rgb(4 120 87);
+  box-shadow: 0 0 0 4px rgb(167 243 208 / 0.9);
+}
+
+:deep(.editor-image-frame) {
+  overflow: hidden;
+  border-radius: 1rem;
+  background: white;
+}
+
+:deep(.editor-image-frame img) {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+:deep(.editor-image-node[data-display-size='large'] .editor-image-frame img) {
+  width: 100%;
+}
+
+:deep(.editor-image-caption) {
+  margin-top: 0.7rem;
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.6;
+  color: rgb(71 85 105);
+}
+
+:deep(.editor-image-missing) {
+  border-radius: 1rem;
+  background: rgb(241 245 249);
+  padding: 2rem;
+  text-align: center;
+  font-weight: 900;
+  color: rgb(71 85 105);
+}
+
+:deep(.editor-image-edit-button) {
+  margin-top: 0.75rem;
+  border-radius: 9999px;
+  background: rgb(4 120 87);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: white;
+}
+
+:deep(.editor-image-edit-button:focus-visible) {
+  outline: 2px solid rgb(4 120 87);
+  outline-offset: 3px;
 }
 </style>

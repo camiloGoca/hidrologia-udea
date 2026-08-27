@@ -198,4 +198,99 @@ describe('PostContentRenderer', () => {
     expect(wrapper.html()).not.toContain('position: fixed')
     expect(wrapper.text()).toContain('Texto seguro')
   })
+
+  it('renders image nodes from post image metadata instead of document URLs', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        images: [
+          {
+            id: 15,
+            secureUrl: 'https://res.cloudinary.com/demo/image/upload/post.png',
+            width: 900,
+            height: 600,
+            altText: 'Grafica de caudales',
+          },
+        ],
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                postImageId: 15,
+                caption: 'Figura 1. Curva validada',
+                secureUrl: 'javascript:alert(1)',
+              } as never,
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    const image = wrapper.get('img')
+
+    expect(image.attributes('src')).toBe('https://res.cloudinary.com/demo/image/upload/post.png')
+    expect(image.attributes('alt')).toBe('Grafica de caudales')
+    expect(image.attributes('width')).toBe('900')
+    expect(image.attributes('height')).toBe('600')
+    expect(wrapper.get('figure').classes()).toContain('max-w-2xl')
+    expect(wrapper.get('figcaption').text()).toBe('Figura 1. Curva validada')
+    expect(wrapper.html()).not.toContain('javascript:alert')
+  })
+
+  it('maps image display size tokens to controlled renderer classes', () => {
+    for (const [displaySize, expectedClass] of [
+      ['small', 'max-w-sm'],
+      ['medium', 'max-w-2xl'],
+      ['large', 'w-full'],
+    ] as const) {
+      const wrapper = mount(PostContentRenderer, {
+        props: {
+          images: [
+            {
+              id: 15,
+              secureUrl: 'https://res.cloudinary.com/demo/image/upload/post.png',
+              width: 900,
+              height: 600,
+              altText: 'Grafica de caudales',
+            },
+          ],
+          document: {
+            type: 'doc',
+            content: [
+              {
+                type: 'image',
+                attrs: {
+                  postImageId: 15,
+                  displaySize,
+                },
+              },
+            ],
+          } satisfies PostContentDocument,
+        },
+      })
+
+      expect(wrapper.get('figure').classes()).toContain(expectedClass)
+      expect(wrapper.get('img').classes()).toContain('max-w-full')
+      expect(wrapper.html()).not.toContain('max-w-[360px]')
+      expect(wrapper.html()).not.toContain('style=')
+
+      wrapper.unmount()
+    }
+  })
+
+  it('degrades safely when image metadata is missing', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        images: [],
+        document: {
+          type: 'doc',
+          content: [{ type: 'image', attrs: { postImageId: 99 } }],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Imagen no disponible')
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
 })

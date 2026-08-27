@@ -93,7 +93,7 @@ watch(
         <HashtagChip v-for="tag in post.tags" :key="tag.slug" :tag="tag" />
       </div>
 
-      <PostContentRenderer class="mt-8" :document="post.contentDocument" />
+      <PostContentRenderer class="mt-8" :document="post.contentDocument" :images="post.images" />
     </article>
   </section>
 </template>

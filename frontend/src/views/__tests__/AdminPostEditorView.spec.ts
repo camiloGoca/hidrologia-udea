@@ -4,11 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  deleteAdminPostImage,
   discardManualAdminPost,
   getAdminPost,
   publishAdminPost,
   restoreAdminPost,
+  updateAdminPostImageAltText,
   updateAdminPost,
+  uploadAdminPostImage,
 } from '@/services/api/adminPostService'
 import { getAdminTags } from '@/services/api/adminTagService'
 import { discardQuestionDraft } from '@/services/api/adminService'
@@ -40,6 +43,9 @@ vi.mock('@/services/api/adminPostService', () => ({
   archiveAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   restoreAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   discardManualAdminPost: vi.fn<(id: number) => Promise<void>>(),
+  uploadAdminPostImage: vi.fn<(postId: number, payload: unknown) => Promise<unknown>>(),
+  updateAdminPostImageAltText: vi.fn<(postId: number, imageId: number, altText: string) => Promise<unknown>>(),
+  deleteAdminPostImage: vi.fn<(postId: number, imageId: number) => Promise<void>>(),
 }))
 
 vi.mock('@/services/api/adminTagService', () => ({
@@ -68,6 +74,9 @@ const mockedPublishAdminPost = vi.mocked(publishAdminPost)
 const mockedArchiveAdminPost = vi.mocked(archiveAdminPost)
 const mockedRestoreAdminPost = vi.mocked(restoreAdminPost)
 const mockedDiscardManualAdminPost = vi.mocked(discardManualAdminPost)
+const mockedUploadAdminPostImage = vi.mocked(uploadAdminPostImage)
+const mockedUpdateAdminPostImageAltText = vi.mocked(updateAdminPostImageAltText)
+const mockedDeleteAdminPostImage = vi.mocked(deleteAdminPostImage)
 const mockedGetAdminTags = vi.mocked(getAdminTags)
 const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedGetSections = vi.mocked(getSections)
@@ -84,6 +93,9 @@ describe('AdminPostEditorView', () => {
     mockedArchiveAdminPost.mockReset()
     mockedRestoreAdminPost.mockReset()
     mockedDiscardManualAdminPost.mockReset()
+    mockedUploadAdminPostImage.mockReset()
+    mockedUpdateAdminPostImageAltText.mockReset()
+    mockedDeleteAdminPostImage.mockReset()
     mockedGetAdminTags.mockReset()
     mockedGetAdminTags.mockResolvedValue(tags())
     mockedDiscardQuestionDraft.mockReset()
@@ -132,6 +144,36 @@ describe('AdminPostEditorView', () => {
     await flushPromises()
 
     expect(wrapper.get('article').classes()).not.toContain('overflow-hidden')
+  })
+
+  it('passes post images and image callbacks to the academic editor', async () => {
+    const image = {
+      id: 15,
+      secureUrl: 'https://res.cloudinary.com/demo/image/upload/post.png',
+      format: 'png',
+      width: 800,
+      height: 600,
+      bytes: 1200,
+      altText: 'Grafica',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+    mockedGetAdminPost.mockResolvedValue(adminPost({ images: [] }))
+    mockedUploadAdminPostImage.mockResolvedValue(image)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const editor = wrapper.getComponent({ name: 'AcademicPostEditor' })
+    expect(editor.props('images')).toEqual([])
+
+    const uploadImage = editor.props('uploadImage') as (file: File, altText: string) => Promise<unknown>
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await uploadImage(file, 'Grafica')
+    await flushPromises()
+
+    expect(mockedUploadAdminPostImage).toHaveBeenCalledWith(9, { file, altText: 'Grafica' })
+    expect(wrapper.getComponent({ name: 'AcademicPostEditor' }).props('images')).toEqual([image])
   })
 
   it('tracks dirty state and saves a draft manually', async () => {
@@ -566,7 +608,15 @@ function mountView() {
     global: {
       stubs: {
         AcademicPostEditor: {
-          props: ['id', 'modelValue'],
+          name: 'AcademicPostEditor',
+          props: [
+            'id',
+            'modelValue',
+            'images',
+            'uploadImage',
+            'updateImageAltText',
+            'deleteImage',
+          ],
           emits: ['update:modelValue'],
           computed: {
             text() {
@@ -634,6 +684,7 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     updatedAt: '2026-01-01T00:00:00Z',
     publishedAt: null,
     tags: [],
+    images: [],
     ...overrides,
   }
 }

@@ -13,5 +13,6 @@ public record PostDetailResponse(
         Map<String, Object> contentDocument,
         PostSectionResponse section,
         List<TagResponse> tags,
+        List<PostImageResponse> images,
         Instant publishedAt) {
 }

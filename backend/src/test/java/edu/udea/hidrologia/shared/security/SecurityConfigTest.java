@@ -141,6 +141,7 @@ class SecurityConfigTest {
                         contentDocument("Contenido"),
                         section,
                         List.of(),
+                        List.of(),
                         null));
 
         mockMvc.perform(get("/api/v1/posts/1"))

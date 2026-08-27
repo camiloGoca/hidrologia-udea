@@ -8,12 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
+import edu.udea.hidrologia.post.dto.PostImageResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.entity.Post;
+import edu.udea.hidrologia.post.entity.PostImage;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.repository.SectionRepository;
@@ -26,16 +29,19 @@ import edu.udea.hidrologia.tag.repository.TagRepository;
 public class PostQueryService {
 
     private final PostRepository postRepository;
+    private final PostImageRepository postImageRepository;
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
     private final PostContentDocumentService postContentDocumentService;
 
     public PostQueryService(
             PostRepository postRepository,
+            PostImageRepository postImageRepository,
             SectionRepository sectionRepository,
             TagRepository tagRepository,
             PostContentDocumentService postContentDocumentService) {
         this.postRepository = postRepository;
+        this.postImageRepository = postImageRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
         this.postContentDocumentService = postContentDocumentService;
@@ -90,6 +96,7 @@ public class PostQueryService {
                 postContentDocumentService.toSerializableDocument(post.getContentDocument()),
                 toSectionResponse(post.getSection()),
                 toTagResponses(post),
+                toReferencedImageResponses(post),
                 post.getPublishedAt());
     }
 
@@ -112,5 +119,25 @@ public class PostQueryService {
 
     private TagResponse toTagResponse(Tag tag) {
         return new TagResponse(tag.getName(), tag.getSlug());
+    }
+
+    private List<PostImageResponse> toReferencedImageResponses(Post post) {
+        var referencedImageIds = postContentDocumentService.referencedPostImageIds(post.getContentDocument());
+        if (referencedImageIds.isEmpty()) {
+            return List.of();
+        }
+
+        return postImageRepository.findByPostIdAndIdInOrderById(post.getId(), referencedImageIds).stream()
+                .map(this::toImageResponse)
+                .toList();
+    }
+
+    private PostImageResponse toImageResponse(PostImage image) {
+        return new PostImageResponse(
+                image.getId(),
+                image.getSecureUrl(),
+                image.getWidth(),
+                image.getHeight(),
+                image.getAltText());
     }
 }

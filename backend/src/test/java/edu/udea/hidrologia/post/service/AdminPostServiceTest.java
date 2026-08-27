@@ -718,6 +718,73 @@ class AdminPostServiceTest {
         assertThat(draft.getContent()).isEmpty();
     }
 
+    @Test
+    void acceptsOwnPostImagesWhenUpdatingContentDocument() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(postImageRepository.countByPostIdAndIdIn(9L, Set.of(15L))).thenReturn(1L);
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", imageDocument(15L), "taller-1", null));
+
+        assertThat(response.content()).isEqualTo("Figura de validacion");
+        assertThat(response.contentDocument().toString()).contains("postImageId=15");
+        verify(postImageRepository).countByPostIdAndIdIn(9L, Set.of(15L));
+    }
+
+    @Test
+    void acceptsRepeatedOwnPostImageReferenceOnce() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(postImageRepository.countByPostIdAndIdIn(9L, Set.of(15L))).thenReturn(1L);
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", repeatedImageDocument(15L), "taller-1", null));
+
+        assertThat(response.content()).contains("Primera figura").contains("Segunda figura");
+        verify(postImageRepository).countByPostIdAndIdIn(9L, Set.of(15L));
+    }
+
+    @Test
+    void rejectsMissingOrForeignPostImageWithoutMutatingPost() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(postImageRepository.countByPostIdAndIdIn(9L, Set.of(15L))).thenReturn(0L);
+
+        assertThatThrownBy(() -> adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", imageDocument(15L), "taller-1", null)))
+                .isInstanceOf(InvalidPostPublicationException.class)
+                .hasMessage("Una o mas imagenes seleccionadas no existen.");
+
+        assertThat(draft.getTitle()).isEmpty();
+        assertThat(draft.getContent()).isEmpty();
+    }
+
+    @Test
+    void acceptsSeveralOwnPostImagesWhenUpdatingContentDocument() {
+        StudentQuestion question = question();
+        Post draft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(draft));
+        when(sectionRepository.findBySlugAndActiveTrue("taller-1")).thenReturn(Optional.of(question.getSection()));
+        when(postImageRepository.countByPostIdAndIdIn(9L, Set.of(15L, 16L))).thenReturn(2L);
+
+        AdminPostResponse response = adminPostService.updatePost(
+                9L,
+                new UpdatePostRequest("Titulo", twoImagesDocument(), "taller-1", null));
+
+        assertThat(response.content()).contains("Figura uno").contains("Figura dos");
+        verify(postImageRepository).countByPostIdAndIdIn(9L, Set.of(15L, 16L));
+    }
+
     private Post draftPost(StudentQuestion question) {
         return new Post(
                 9L,
@@ -779,6 +846,48 @@ class AdminPostServiceTest {
         return Map.of(
                 "type", "doc",
                 "content", List.of(Map.of("type", "image")));
+    }
+
+    private Map<String, Object> imageDocument(Long postImageId) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "image",
+                        "attrs", Map.of(
+                                "postImageId", postImageId,
+                                "caption", "Figura de validacion"))));
+    }
+
+    private Map<String, Object> repeatedImageDocument(Long postImageId) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(
+                        Map.of(
+                                "type", "image",
+                                "attrs", Map.of(
+                                        "postImageId", postImageId,
+                                        "caption", "Primera figura")),
+                        Map.of(
+                                "type", "image",
+                                "attrs", Map.of(
+                                        "postImageId", postImageId,
+                                        "caption", "Segunda figura"))));
+    }
+
+    private Map<String, Object> twoImagesDocument() {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(
+                        Map.of(
+                                "type", "image",
+                                "attrs", Map.of(
+                                        "postImageId", 15L,
+                                        "caption", "Figura uno")),
+                        Map.of(
+                                "type", "image",
+                                "attrs", Map.of(
+                                        "postImageId", 16L,
+                                        "caption", "Figura dos"))));
     }
 
     private PageRequest pageRequest(int page, int size) {

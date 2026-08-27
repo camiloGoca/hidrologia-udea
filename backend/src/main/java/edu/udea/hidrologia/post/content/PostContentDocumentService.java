@@ -3,6 +3,7 @@ package edu.udea.hidrologia.post.content;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,8 @@ public class PostContentDocumentService {
             "orderedList",
             "listItem",
             "blockquote",
-            "academicBlock");
+            "academicBlock",
+            "image");
     private static final Set<String> INLINE_NODES = Set.of("text", "hardBreak");
     private static final Set<String> MARKS = Set.of(
             "bold",
@@ -42,6 +44,8 @@ public class PostContentDocumentService {
     private static final Set<String> TEXT_COLORS = Set.of("default", "institutional", "blue", "muted", "danger");
     private static final Set<String> HIGHLIGHT_KINDS = Set.of("note", "important");
     private static final Set<String> ACADEMIC_BLOCK_KINDS = Set.of("note", "example", "important");
+    private static final Set<String> IMAGE_DISPLAY_SIZES = Set.of("small", "medium", "large");
+    private static final int IMAGE_CAPTION_MAX_LENGTH = 240;
 
     private final JsonMapper jsonMapper;
 
@@ -111,6 +115,14 @@ public class PostContentDocumentService {
         }
 
         return referencesPostImageIdValue(document, postImageId);
+    }
+
+    public Set<Long> referencedPostImageIds(Map<String, Object> document) {
+        JsonNode validated = validateJson(toJsonNode(document));
+        Set<Long> ids = new LinkedHashSet<>();
+        collectPostImageIds(validated, ids);
+
+        return ids;
     }
 
     private JsonNode validateJson(JsonNode document) {
@@ -199,6 +211,9 @@ public class PostContentDocumentService {
         } else if ("academicBlock".equals(type)) {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateAcademicBlockAttrs(node.get("attrs"));
+        } else if ("image".equals(type)) {
+            validateOnlyFields(node, Set.of("type", "attrs"));
+            validateImageAttrs(node.get("attrs"));
         } else {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateNoAttrs(node.get("attrs"));
@@ -312,6 +327,28 @@ public class PostContentDocumentService {
         validateRequiredTokenAttr(attrs, "kind", ACADEMIC_BLOCK_KINDS);
     }
 
+    private void validateImageAttrs(JsonNode attrs) {
+        if (attrs == null || !attrs.isObject()) {
+            throw invalid();
+        }
+        validateOnlyFields(attrs, Set.of("postImageId", "caption", "displaySize"));
+        JsonNode postImageId = attrs.get("postImageId");
+        if (postImageId == null || !postImageId.isIntegralNumber() || postImageId.longValue() <= 0) {
+            throw invalid();
+        }
+        JsonNode displaySize = attrs.get("displaySize");
+        if (displaySize != null && !isAllowedToken(displaySize, IMAGE_DISPLAY_SIZES)) {
+            throw invalid();
+        }
+
+        JsonNode caption = attrs.get("caption");
+        if (caption != null && !caption.isNull()) {
+            if (!caption.isTextual() || caption.asText().strip().length() > IMAGE_CAPTION_MAX_LENGTH) {
+                throw invalid();
+            }
+        }
+    }
+
     private void validateLinkAttrs(JsonNode attrs) {
         if (attrs == null || !attrs.isObject()) {
             throw invalid();
@@ -409,6 +446,14 @@ public class PostContentDocumentService {
             text.append(node.get("text").asText());
             return;
         }
+        if ("image".equals(type)) {
+            JsonNode caption = node.path("attrs").get("caption");
+            if (caption != null && caption.isTextual() && !caption.asText().isBlank()) {
+                text.append(caption.asText());
+                text.append('\n');
+            }
+            return;
+        }
         if ("hardBreak".equals(type)) {
             text.append('\n');
             return;
@@ -460,6 +505,24 @@ public class PostContentDocumentService {
         }
 
         return false;
+    }
+
+    private void collectPostImageIds(JsonNode node, Set<Long> ids) {
+        if (node == null || !node.isObject()) {
+            return;
+        }
+
+        if ("image".equals(textValue(node.get("type")))) {
+            ids.add(node.get("attrs").get("postImageId").longValue());
+            return;
+        }
+
+        JsonNode content = node.get("content");
+        if (content != null && content.isArray()) {
+            for (JsonNode child : content) {
+                collectPostImageIds(child, ids);
+            }
+        }
     }
 
     private boolean numericValueEquals(Object value, Long expected) {
@@ -541,6 +604,22 @@ public class PostContentDocumentService {
         if ("academicBlock".equals(type)) {
             ObjectNode result = JsonNodeFactory.instance.objectNode();
             result.put("kind", attrs.get("kind").asText());
+
+            return result;
+        }
+
+        if ("image".equals(type)) {
+            ObjectNode result = JsonNodeFactory.instance.objectNode();
+            result.put("postImageId", attrs.get("postImageId").longValue());
+            JsonNode displaySize = attrs.get("displaySize");
+            result.put("displaySize", displaySize == null || displaySize.isNull() ? "medium" : displaySize.asText());
+            JsonNode caption = attrs.get("caption");
+            if (caption != null && !caption.isNull()) {
+                String normalizedCaption = caption.asText().strip();
+                if (!normalizedCaption.isBlank()) {
+                    result.put("caption", normalizedCaption);
+                }
+            }
 
             return result;
         }

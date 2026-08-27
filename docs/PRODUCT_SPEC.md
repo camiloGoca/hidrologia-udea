@@ -377,6 +377,16 @@ Implementado en la fase Editor Académico EP2:
 * el backend continúa validando y normalizando el documento estructurado;
 * el render público traduce únicamente tokens conocidos a estilos seguros, sin HTML ni CSS libre.
 
+Implementado en la fase Editor Académico EP3B:
+
+* el profesor puede subir imágenes propias de una publicación e insertarlas exactamente en la posición del cursor;
+* el documento estructurado guarda únicamente `postImageId`, un `caption` opcional y un `displaySize` controlado (`small`, `medium`, `large`), nunca URLs ni `public_id`;
+* el texto alternativo pertenece a la metadata `PostImage` y se actualiza de forma independiente;
+* el pie de imagen y el tamaño visual pertenecen al uso editorial dentro de `content_document`;
+* el render público resuelve cada imagen contra la metadata del Post actual y no utiliza URLs provenientes del documento;
+* el backend valida que las imágenes referenciadas existan y pertenezcan a la publicación antes de guardar;
+* no hay redimensionamiento libre, píxeles/porcentajes persistidos, vista previa ni limpieza automática avanzada de imágenes no usadas todavía.
+
 Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
 
 Futuro:
@@ -384,8 +394,8 @@ Futuro:
 * búsqueda avanzada o autocompletado de hashtags;
 * vista previa del contenido antes de publicar;
 * redirects si alguna vez se permite cambiar slugs;
-* imágenes propias de Posts;
 * copia controlada de una QuestionAttachment hacia una imagen de Post;
+* limpieza automática avanzada de imágenes de Post no referenciadas;
 * versionado o historial de cambios;
 * autosave.
 

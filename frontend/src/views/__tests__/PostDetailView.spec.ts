@@ -57,6 +57,7 @@ const post: PostDetail = {
     description: 'Morfometría de cuencas',
   },
   tags: [{ name: 'Cuencas', slug: 'cuencas' }],
+  images: [],
   publishedAt: '2026-01-02T00:00:00Z',
 }
 

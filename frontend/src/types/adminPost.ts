@@ -18,6 +18,17 @@ export interface AdminPostTag {
   slug: string
 }
 
+export interface AdminPostImage {
+  id: number
+  secureUrl: string
+  format: string
+  width: number
+  height: number
+  bytes: number
+  altText: string
+  createdAt: string
+}
+
 export interface AdminPost {
   id: number
   title: string
@@ -28,6 +39,7 @@ export interface AdminPost {
   section: AdminQuestionSection
   sourceQuestion: AdminPostSourceQuestion | null
   tags: AdminPostTag[]
+  images: AdminPostImage[]
   createdAt: string
   updatedAt: string
   publishedAt: string | null

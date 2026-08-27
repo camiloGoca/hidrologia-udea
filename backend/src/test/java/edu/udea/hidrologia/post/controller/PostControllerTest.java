@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
+import edu.udea.hidrologia.post.dto.PostImageResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
@@ -90,13 +91,23 @@ class PostControllerTest {
                         contentDocument("Contenido de texto seguro."),
                         section(),
                         List.of(tag()),
+                        List.of(new PostImageResponse(
+                                5L,
+                                "https://res.cloudinary.com/demo/image/upload/post.png",
+                                800,
+                                600,
+                                "Grafica")),
                         PUBLISHED_AT));
 
         mockMvc.perform(get("/api/v1/posts/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(1)))
                 .andExpect(jsonPath("$.content", is("Contenido de texto seguro.")))
-                .andExpect(jsonPath("$.contentDocument.type", is("doc")));
+                .andExpect(jsonPath("$.contentDocument.type", is("doc")))
+                .andExpect(jsonPath("$.images[0].id", is(5)))
+                .andExpect(jsonPath("$.images[0].secureUrl", is("https://res.cloudinary.com/demo/image/upload/post.png")))
+                .andExpect(jsonPath("$.images[0].altText", is("Grafica")))
+                .andExpect(jsonPath("$.images[0].publicId").doesNotExist());
     }
 
     @Test

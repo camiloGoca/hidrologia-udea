@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -24,7 +25,9 @@ import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.entity.Post;
+import edu.udea.hidrologia.post.entity.PostImage;
 import edu.udea.hidrologia.post.entity.PostStatus;
+import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.entity.SectionType;
@@ -43,6 +46,9 @@ class PostQueryServiceTest {
     private PostRepository postRepository;
 
     @Mock
+    private PostImageRepository postImageRepository;
+
+    @Mock
     private SectionRepository sectionRepository;
 
     @Mock
@@ -54,6 +60,7 @@ class PostQueryServiceTest {
     void setUp() {
         postQueryService = new PostQueryService(
                 postRepository,
+                postImageRepository,
                 sectionRepository,
                 tagRepository,
                 new PostContentDocumentService(JsonMapper.builder().build()));
@@ -111,7 +118,47 @@ class PostQueryServiceTest {
         assertThat(response.title()).isEqualTo("Pregunta publicada");
         assertThat(response.content()).isEqualTo("Contenido de texto seguro.");
         assertThat(response.tags()).hasSize(1);
+        assertThat(response.images()).isEmpty();
         verify(postRepository).findByIdAndStatus(1L, PostStatus.PUBLISHED);
+    }
+
+    @Test
+    void returnsOnlyReferencedPublicImagesForPostDetail() {
+        Section section = section();
+        Post post = new Post(
+                1L,
+                section,
+                "Pregunta publicada",
+                "Figura de validacion",
+                imageDocument(7L),
+                PostStatus.PUBLISHED,
+                CREATED_AT,
+                CREATED_AT,
+                PUBLISHED_AT,
+                Set.of(),
+                null);
+        PostImage referenced = new PostImage(
+                7L,
+                post,
+                "hidrologia-udea/posts/1/post-1-image-7",
+                "https://res.cloudinary.com/demo/image/upload/post-1-image-7.jpg",
+                "jpg",
+                900,
+                600,
+                1200L,
+                "Grafica de prueba",
+                CREATED_AT);
+        when(postRepository.findByIdAndStatus(1L, PostStatus.PUBLISHED)).thenReturn(Optional.of(post));
+        when(postImageRepository.findByPostIdAndIdInOrderById(1L, Set.of(7L))).thenReturn(List.of(referenced));
+
+        PostDetailResponse response = postQueryService.findPublishedPostById(1L);
+
+        assertThat(response.images()).hasSize(1);
+        assertThat(response.images().get(0).id()).isEqualTo(7L);
+        assertThat(response.images().get(0).secureUrl())
+                .isEqualTo("https://res.cloudinary.com/demo/image/upload/post-1-image-7.jpg");
+        assertThat(response.images().get(0).altText()).isEqualTo("Grafica de prueba");
+        verify(postImageRepository).findByPostIdAndIdInOrderById(1L, Set.of(7L));
     }
 
     @Test
@@ -244,5 +291,15 @@ class PostQueryServiceTest {
                 CREATED_AT,
                 PUBLISHED_AT,
                 new LinkedHashSet<>(tags));
+    }
+
+    private Map<String, Object> imageDocument(Long postImageId) {
+        return Map.of(
+                "type", "doc",
+                "content", List.of(Map.of(
+                        "type", "image",
+                        "attrs", Map.of(
+                                "postImageId", postImageId,
+                                "caption", "Figura de validacion"))));
     }
 }

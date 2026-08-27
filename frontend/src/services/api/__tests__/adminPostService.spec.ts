@@ -10,9 +10,12 @@ import {
   getPostsByStatus,
   publishAdminPost,
   restoreAdminPost,
+  deleteAdminPostImage,
   updateAdminPost,
+  updateAdminPostImageAltText,
+  uploadAdminPostImage,
 } from '@/services/api/adminPostService'
-import type { AdminPost, AdminPostsResponse } from '@/types/adminPost'
+import type { AdminPost, AdminPostImage, AdminPostsResponse } from '@/types/adminPost'
 import type { PostContentDocument } from '@/types/postContent'
 
 vi.mock('@/services/api/adminHttpClient', () => ({
@@ -159,7 +162,53 @@ describe('adminPostService', () => {
 
     expect(mockedDelete).toHaveBeenCalledWith('/admin/posts/10')
   })
+
+  it('uploads a post image through multipart admin request', async () => {
+    const image = adminPostImage()
+    mockedPost.mockResolvedValue({ data: image } as AxiosResponse<AdminPostImage>)
+    const file = new File(['image'], 'grafica.png', { type: 'image/png' })
+
+    await expect(uploadAdminPostImage(9, { file, altText: 'Grafica' })).resolves.toEqual(image)
+
+    expect(mockedPost).toHaveBeenCalledWith('/admin/posts/9/images', expect.any(FormData))
+    const formData = mockedPost.mock.calls[0]?.[1] as FormData
+    expect(formData.get('file')).toBe(file)
+    expect(formData.get('altText')).toBe('Grafica')
+  })
+
+  it('updates post image alt text through admin request', async () => {
+    const image = adminPostImage({ altText: 'Nueva descripcion' })
+    mockedPatch.mockResolvedValue({ data: image } as AxiosResponse<AdminPostImage>)
+
+    await expect(updateAdminPostImageAltText(9, 4, 'Nueva descripcion')).resolves.toEqual(image)
+
+    expect(mockedPatch).toHaveBeenCalledWith('/admin/posts/9/images/4', {
+      altText: 'Nueva descripcion',
+    })
+  })
+
+  it('deletes a post image through admin request', async () => {
+    mockedDelete.mockResolvedValue({ data: undefined } as AxiosResponse<void>)
+
+    await expect(deleteAdminPostImage(9, 4)).resolves.toBeUndefined()
+
+    expect(mockedDelete).toHaveBeenCalledWith('/admin/posts/9/images/4')
+  })
 })
+
+function adminPostImage(overrides: Partial<AdminPostImage> = {}): AdminPostImage {
+  return {
+    id: 4,
+    secureUrl: 'https://res.cloudinary.com/demo/image/upload/post.png',
+    format: 'png',
+    width: 800,
+    height: 600,
+    bytes: 1200,
+    altText: 'Grafica',
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
 
 function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
   const content = overrides.content ?? ''
@@ -190,6 +239,7 @@ function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {
     updatedAt: '2026-01-01T00:00:00Z',
     publishedAt: null,
     tags: [],
+    images: [],
     ...overrides,
   }
 }

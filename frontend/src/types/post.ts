@@ -22,9 +22,18 @@ export interface PostSummary {
   publishedAt: string
 }
 
+export interface PostImage {
+  id: number
+  secureUrl: string
+  width: number
+  height: number
+  altText: string
+}
+
 export interface PostDetail extends PostSummary {
   content: string
   contentDocument: PostContentDocument
+  images: PostImage[]
 }
 
 export interface SectionPostsResponse {

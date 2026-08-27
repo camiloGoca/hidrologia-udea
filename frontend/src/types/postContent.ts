@@ -3,6 +3,7 @@ export type PostContentTextColor = 'default' | 'institutional' | 'blue' | 'muted
 export type PostContentHighlightKind = 'note' | 'important'
 export type PostContentTextAlign = 'left' | 'center' | 'right' | 'justify'
 export type PostContentAcademicBlockKind = 'note' | 'example' | 'important'
+export type PostContentImageDisplaySize = 'small' | 'medium' | 'large'
 
 export type PostContentMarkType =
   | 'bold'
@@ -38,6 +39,7 @@ export type PostContentNodeType =
   | 'blockquote'
   | 'hardBreak'
   | 'academicBlock'
+  | 'image'
 
 export interface PostContentNode {
   type: PostContentNodeType
@@ -48,6 +50,9 @@ export interface PostContentNode {
     type?: string | null
     textAlign?: PostContentTextAlign | null
     kind?: PostContentAcademicBlockKind
+    postImageId?: number
+    caption?: string | null
+    displaySize?: PostContentImageDisplaySize
   }
   marks?: PostContentMark[]
   content?: PostContentNode[]

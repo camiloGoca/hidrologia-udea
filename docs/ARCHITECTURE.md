@@ -449,7 +449,9 @@ En Editor Académico EP1 el editor administrativo envía `contentDocument`; el b
 
 En Editor Académico EP2 el documento estructurado admite estilos semánticos controlados mediante tokens: tamaños (`small`, `normal`, `large`), colores (`default`, `institutional`, `blue`, `muted`, `danger`), alineación (`left`, `center`, `right`, `justify`), resaltados (`note`, `important`) y bloques académicos (`note`, `example`, `important`). La barra de herramientas del editor es sticky respecto al scroll principal para facilitar publicaciones largas, y los enlaces tienen presentación visual propia durante la edición sin cambiar su representación canónica. El backend rechaza atributos desconocidos, colores libres, tamaños libres, clases arbitrarias y estilos CSS enviados por el cliente. El renderer público mapea esos tokens a clases conocidas y continúa sin usar `v-html`.
 
-Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, vista previa editorial, imágenes propias de Posts, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
+En Editor Académico EP3B las imágenes de publicaciones se representan en `content_document` mediante nodos `image` que contienen únicamente `postImageId`, un `caption` opcional y un `displaySize` controlado (`small`, `medium`, `large`). La URL segura, dimensiones y texto alternativo viven en `post_images`; el `public_id` permanece solo en backend. Al guardar un Post, el backend extrae todos los `postImageId`, valida por lote que existan y pertenezcan al Post actual, y rechaza referencias cruzadas. El renderer público recibe únicamente la metadata de imágenes efectivamente referenciadas por el documento y renderiza `<figure>`, `<img>` y `<figcaption>` sin usar HTML libre ni URLs provenientes del JSON editorial. El editor inserta imágenes en la selección/cursor capturado; el texto alternativo se actualiza sobre `PostImage`, mientras el caption y el tamaño visual pertenecen al nodo del documento. El redimensionamiento libre, la vista previa, la copia desde `QuestionAttachment` y la limpieza automática avanzada quedan fuera de esta fase.
+
+Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, vista previa editorial, copia explícita de QuestionAttachment hacia Post, limpieza automática avanzada de imágenes no referenciadas, versionado/historial y autosave.
 
 ---
 
@@ -517,6 +519,8 @@ Validar:
 PostgreSQL guarda referencias, no el archivo binario.
 
 Las imágenes adjuntas a preguntas permanecen privadas del flujo administrativo. No se copian automáticamente a Posts. Si una publicación futura reutiliza una imagen de pregunta, deberá hacerlo mediante una copia independiente propiedad del Post.
+
+Las imágenes propias de Posts se almacenan como metadata en `post_images` y se referencian desde el documento estructurado por `postImageId`. El documento puede guardar `displaySize` como token controlado, pero no almacena URLs, `public_id`, estilos arbitrarios, clases CSS, píxeles, porcentajes ni binarios. El render público solo expone la metadata mínima necesaria de imágenes referenciadas por el Post publicado.
 
 ---
 

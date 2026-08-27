@@ -6,18 +6,21 @@ import AcademicPostEditor from '@/components/AcademicPostEditor.vue'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  deleteAdminPostImage,
   discardManualAdminPost,
   getAdminPost,
   publishAdminPost,
   restoreAdminPost,
+  updateAdminPostImageAltText,
   updateAdminPost,
+  uploadAdminPostImage,
 } from '@/services/api/adminPostService'
 import { getAdminTags } from '@/services/api/adminTagService'
 import { discardQuestionDraft } from '@/services/api/adminService'
 import { getSections } from '@/services/api/sectionService'
 import { signOut } from '@/services/firebase/authService'
 import type { AdminTag } from '@/types/adminTag'
-import type { AdminPost } from '@/types/adminPost'
+import type { AdminPost, AdminPostImage } from '@/types/adminPost'
 import { emptyPostContentDocument, type PostContentDocument } from '@/types/postContent'
 import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
@@ -209,6 +212,46 @@ async function savePost() {
   }
 }
 
+async function uploadEditorImage(file: File, altText: string): Promise<AdminPostImage> {
+  if (!post.value) {
+    throw new Error('Post is not loaded')
+  }
+
+  const image = await uploadAdminPostImage(post.value.id, { file, altText })
+  post.value = {
+    ...post.value,
+    images: upsertImage(post.value.images, image),
+  }
+
+  return image
+}
+
+async function updateEditorImageAltText(imageId: number, altText: string): Promise<AdminPostImage> {
+  if (!post.value) {
+    throw new Error('Post is not loaded')
+  }
+
+  const image = await updateAdminPostImageAltText(post.value.id, imageId, altText)
+  post.value = {
+    ...post.value,
+    images: upsertImage(post.value.images, image),
+  }
+
+  return image
+}
+
+async function deleteEditorImage(imageId: number): Promise<void> {
+  if (!post.value) {
+    throw new Error('Post is not loaded')
+  }
+
+  await deleteAdminPostImage(post.value.id, imageId)
+  post.value = {
+    ...post.value,
+    images: post.value.images.filter((image) => image.id !== imageId),
+  }
+}
+
 async function openConfirmation(action: ConfirmationAction) {
   actionError.value = false
   pendingAction.value = action
@@ -328,6 +371,12 @@ function syncForm(currentPost: AdminPost) {
   saved.contentDocument = cloneContent(currentPost.contentDocument)
   saved.sectionSlug = currentPost.section.slug
   saved.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
+}
+
+function upsertImage(images: AdminPostImage[], image: AdminPostImage) {
+  const withoutImage = images.filter((currentImage) => currentImage.id !== image.id)
+
+  return [...withoutImage, image].sort((left, right) => left.id - right.id)
 }
 
 function cloneContent(document: PostContentDocument) {
@@ -535,6 +584,10 @@ function sameIds(left: number[], right: number[]) {
               <AcademicPostEditor
                 id="post-content"
                 v-model="form.contentDocument"
+                :images="post.images"
+                :upload-image="uploadEditorImage"
+                :update-image-alt-text="updateEditorImageAltText"
+                :delete-image="deleteEditorImage"
               />
             </div>
 

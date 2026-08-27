@@ -4,12 +4,14 @@ import type {
   PostContentAcademicBlockKind,
   PostContentDocument,
   PostContentHighlightKind,
+  PostContentImageDisplaySize,
   PostContentMark,
   PostContentNode,
   PostContentTextAlign,
   PostContentTextColor,
   PostContentTextSize,
 } from '@/types/postContent'
+import type { PostImage } from '@/types/post'
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 const TEXT_ALIGN_CLASSES: Record<PostContentTextAlign, string> = {
@@ -39,6 +41,11 @@ const ACADEMIC_BLOCK_CLASSES: Record<PostContentAcademicBlockKind, string> = {
   example: 'border-sky-200 bg-sky-50 text-sky-950',
   important: 'border-orange-200 bg-orange-50 text-orange-950',
 }
+const IMAGE_DISPLAY_SIZE_CLASSES: Record<PostContentImageDisplaySize, string> = {
+  small: 'w-fit max-w-sm',
+  medium: 'w-fit max-w-2xl',
+  large: 'w-full max-w-full',
+}
 
 export default defineComponent({
   name: 'PostContentRenderer',
@@ -46,6 +53,10 @@ export default defineComponent({
     document: {
       type: Object as PropType<PostContentDocument>,
       required: true,
+    },
+    images: {
+      type: Array as PropType<PostImage[]>,
+      default: () => [],
     },
   },
   setup(props, { attrs }) {
@@ -59,18 +70,18 @@ export default defineComponent({
             attrs.class,
           ],
         },
-        renderChildren(props.document.content ?? []),
+        renderChildren(props.document.content ?? [], imageMap(props.images)),
       )
   },
 })
 
-function renderChildren(nodes: PostContentNode[]): VNode[] {
-  return nodes.map((node, index) => renderNode(node, index)).filter((node): node is VNode => Boolean(node))
+function renderChildren(nodes: PostContentNode[], images: Map<number, PostImage>): VNode[] {
+  return nodes.map((node, index) => renderNode(node, index, images)).filter((node): node is VNode => Boolean(node))
 }
 
-function renderNode(node: PostContentNode, index: number): VNode | null {
+function renderNode(node: PostContentNode, index: number, images: Map<number, PostImage>): VNode | null {
   const key = `${node.type}-${index}`
-  const children = renderChildren(node.content ?? [])
+  const children = renderChildren(node.content ?? [], images)
 
   switch (node.type) {
     case 'paragraph':
@@ -94,6 +105,8 @@ function renderNode(node: PostContentNode, index: number): VNode | null {
       )
     case 'academicBlock':
       return renderAcademicBlock(node, key, children)
+    case 'image':
+      return renderImage(node, key, images)
     case 'text':
       return renderText(node, key)
     case 'hardBreak':
@@ -101,6 +114,50 @@ function renderNode(node: PostContentNode, index: number): VNode | null {
     default:
       return null
   }
+}
+
+function renderImage(node: PostContentNode, key: string, images: Map<number, PostImage>): VNode {
+  const postImageId = node.attrs?.postImageId
+  const image = typeof postImageId === 'number' ? images.get(postImageId) : undefined
+  if (!image) {
+    return h(
+      'figure',
+      {
+        key,
+        class:
+          'rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-bold text-slate-500',
+      },
+      'Imagen no disponible',
+    )
+  }
+
+  const caption = node.attrs?.caption?.trim()
+  const displaySize = imageDisplaySize(node)
+  const imageWidthClass = displaySize === 'large' ? 'w-full' : 'w-auto'
+
+  return h(
+    'figure',
+    {
+      key,
+      class: [
+        'mx-auto rounded-3xl border border-slate-200 bg-slate-50 p-3 shadow-sm',
+        IMAGE_DISPLAY_SIZE_CLASSES[displaySize],
+      ],
+    },
+    [
+      h('img', {
+        src: image.secureUrl,
+        alt: image.altText,
+        width: image.width,
+        height: image.height,
+        class: ['h-auto max-w-full rounded-2xl object-contain', imageWidthClass],
+        loading: 'lazy',
+      }),
+      caption
+        ? h('figcaption', { class: 'px-3 py-3 text-center text-sm font-bold leading-6 text-slate-600' }, caption)
+        : null,
+    ],
+  )
 }
 
 function renderAcademicBlock(node: PostContentNode, key: string, children: VNode[]): VNode {
@@ -209,6 +266,16 @@ function academicBlockLabel(kind: PostContentAcademicBlockKind): string {
     case 'note':
       return 'Nota'
   }
+}
+
+function imageMap(images: PostImage[]): Map<number, PostImage> {
+  return new Map(images.map((image) => [image.id, image]))
+}
+
+function imageDisplaySize(node: PostContentNode): PostContentImageDisplaySize {
+  const displaySize = node.attrs?.displaySize
+
+  return displaySize === 'small' || displaySize === 'large' ? displaySize : 'medium'
 }
 
 function isSafeLink(href: string): boolean {

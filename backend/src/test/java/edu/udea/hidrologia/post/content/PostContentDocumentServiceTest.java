@@ -354,7 +354,7 @@ class PostContentDocumentServiceTest {
         Map<String, Object> document = json("""
                 {
                   "type": "doc",
-                  "content": [{ "type": "image" }]
+                  "content": [{ "type": "iframe" }]
                 }
                 """);
 
@@ -363,21 +363,186 @@ class PostContentDocumentServiceTest {
     }
 
     @Test
-    void detectsFutureImageReferencesWithoutAllowingImageNodesYet() throws Exception {
+    @SuppressWarnings("unchecked")
+    void acceptsAndCanonicalizesImageNodes() throws Exception {
         Map<String, Object> document = json("""
                 {
                   "type": "doc",
                   "content": [
                     {
                       "type": "image",
-                      "attrs": { "postImageId": 15 }
+                      "attrs": {
+                        "postImageId": 15,
+                        "caption": "  Perfil longitudinal  "
+                      }
                     }
                   ]
                 }
                 """);
 
+        Map<String, Object> validated = service.validate(document);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+        Map<String, Object> attrs = (Map<String, Object>) content.get(0).get("attrs");
+
+        assertThat(attrs).containsOnly(
+                Map.entry("postImageId", 15L),
+                Map.entry("caption", "Perfil longitudinal"),
+                Map.entry("displaySize", "medium"));
         assertThat(service.referencesPostImageId(document, 15L)).isTrue();
         assertThat(service.referencesPostImageId(document, 16L)).isFalse();
+        assertThat(service.referencedPostImageIds(document)).containsExactly(15L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptsControlledImageDisplaySizes() throws Exception {
+        for (String displaySize : List.of("small", "medium", "large")) {
+            Map<String, Object> document = imageDocument("""
+                    "postImageId": 15,
+                    "displaySize": "%s"
+                    """.formatted(displaySize));
+
+            Map<String, Object> validated = service.validate(document);
+            List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+            Map<String, Object> attrs = (Map<String, Object>) content.get(0).get("attrs");
+
+            assertThat(attrs).containsEntry("displaySize", displaySize);
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void defaultsMissingImageDisplaySizeToMedium() throws Exception {
+        Map<String, Object> document = imageDocument("""
+                "postImageId": 15
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+        Map<String, Object> attrs = (Map<String, Object>) content.get(0).get("attrs");
+
+        assertThat(attrs).containsOnly(
+                Map.entry("postImageId", 15L),
+                Map.entry("displaySize", "medium"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void omitsBlankImageCaptionDuringCanonicalization() throws Exception {
+        Map<String, Object> document = imageDocument("""
+                "postImageId": 15,
+                "caption": "   "
+                """);
+
+        Map<String, Object> validated = service.validate(document);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) validated.get("content");
+        Map<String, Object> attrs = (Map<String, Object>) content.get(0).get("attrs");
+
+        assertThat(attrs).containsOnly(
+                Map.entry("postImageId", 15L),
+                Map.entry("displaySize", "medium"));
+    }
+
+    @Test
+    void extractsImageCaptionAsPlainText() throws Exception {
+        Map<String, Object> document = imageDocument("""
+                "postImageId": 15,
+                "caption": "Curva observada"
+                """);
+
+        assertThat(service.extractPlainText(document)).isEqualTo("Curva observada");
+    }
+
+    @Test
+    void rejectsImageWithoutPositiveIntegralPostImageId() throws Exception {
+        for (String attrs : List.of(
+                """
+                "caption": "Sin id"
+                """,
+                """
+                "postImageId": 0
+                """,
+                """
+                "postImageId": -1
+                """,
+                """
+                "postImageId": "15"
+                """,
+                """
+                "postImageId": 15.5
+                """)) {
+            Map<String, Object> document = imageDocument(attrs);
+
+            assertThatThrownBy(() -> service.validate(document))
+                    .isInstanceOf(InvalidPostContentDocumentException.class);
+        }
+    }
+
+    @Test
+    void rejectsInvalidImageAttributes() throws Exception {
+        for (String attrs : List.of(
+                """
+                "postImageId": 15,
+                "caption": "%s"
+                """.formatted("a".repeat(241)),
+                """
+                "postImageId": 15,
+                "displaySize": null
+                """,
+                """
+                "postImageId": 15,
+                "displaySize": "half"
+                """,
+                """
+                "postImageId": 15,
+                "displaySize": "360px"
+                """,
+                """
+                "postImageId": 15,
+                "displaySize": "50%"
+                """,
+                """
+                "postImageId": 15,
+                "width": 360
+                """,
+                """
+                "postImageId": 15,
+                "src": "https://example.com/image.png"
+                """,
+                """
+                "postImageId": 15,
+                "url": "https://example.com/image.png"
+                """,
+                """
+                "postImageId": 15,
+                "style": "width: 100px"
+                """,
+                """
+                "postImageId": 15,
+                "publicId": "secret"
+                """)) {
+            Map<String, Object> document = imageDocument(attrs);
+
+            assertThatThrownBy(() -> service.validate(document))
+                    .isInstanceOf(InvalidPostContentDocumentException.class);
+        }
+    }
+
+    @Test
+    void rejectsContentInsideImageNode() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "image",
+                      "attrs": { "postImageId": 15 },
+                      "content": [{ "type": "text", "text": "No permitido" }]
+                    }
+                  ]
+                }
+                """);
+
         assertThatThrownBy(() -> service.validate(document))
                 .isInstanceOf(InvalidPostContentDocumentException.class);
     }
@@ -500,6 +665,20 @@ class PostContentDocumentServiceTest {
                   ]
                 }
                 """.formatted(mark));
+    }
+
+    private Map<String, Object> imageDocument(String attrs) throws Exception {
+        return json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "image",
+                      "attrs": { %s }
+                    }
+                  ]
+                }
+                """.formatted(attrs));
     }
 
     @SuppressWarnings("unchecked")
