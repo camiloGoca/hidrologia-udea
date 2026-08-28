@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { recordSectionView } from '@/services/api/analyticsService'
 import { getPostsBySection } from '@/services/api/postService'
 import type { SectionPostsResponse } from '@/types/post'
 import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
@@ -24,7 +25,12 @@ vi.mock('@/services/api/postService', () => ({
   getPostsBySection: vi.fn<() => Promise<SectionPostsResponse>>(),
 }))
 
+vi.mock('@/services/api/analyticsService', () => ({
+  recordSectionView: vi.fn<() => Promise<void>>(),
+}))
+
 const mockedGetPostsBySection = vi.mocked(getPostsBySection)
+const mockedRecordSectionView = vi.mocked(recordSectionView)
 
 const routerLinkStub = {
   name: 'RouterLink',
@@ -47,6 +53,8 @@ describe('section posts view', () => {
   beforeEach(() => {
     routeState.params.slug = 'taller-1'
     mockedGetPostsBySection.mockReset()
+    mockedRecordSectionView.mockReset()
+    mockedRecordSectionView.mockResolvedValue()
   })
 
   it('shows loading while posts are requested', () => {
@@ -70,6 +78,7 @@ describe('section posts view', () => {
     await flushPromises()
 
     expect(mockedGetPostsBySection).toHaveBeenCalledWith('taller-1')
+    expect(mockedRecordSectionView).toHaveBeenCalledWith('taller-1')
     expect(wrapper.text()).toContain('Aún no hay publicaciones disponibles en esta sección.')
   })
 
@@ -109,6 +118,7 @@ describe('section posts view', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('No pudimos cargar las publicaciones de esta sección.')
+    expect(mockedRecordSectionView).not.toHaveBeenCalled()
   })
 
   it('does not render posts when the route section type is incorrect', async () => {
@@ -145,5 +155,6 @@ describe('section posts view', () => {
 
     expect(wrapper.text()).toContain('No pudimos cargar las publicaciones de esta sección.')
     expect(wrapper.text()).not.toContain('Publicación de parcial')
+    expect(mockedRecordSectionView).not.toHaveBeenCalled()
   })
 })

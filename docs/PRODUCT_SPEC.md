@@ -502,6 +502,13 @@ Una recarga constante de la página no debería incrementar indefinidamente el c
 
 Se utilizará un concepto de sesión anónima para aproximar las visitas.
 
+Implementado en Analytics V1:
+
+* el contador público muestra únicamente visitas totales del sitio;
+* el identificador anónimo vive en `sessionStorage`, por lo que dura la sesión del navegador;
+* refrescar una página no incrementa indefinidamente el contador;
+* no se recolectan IP, ubicación, huella digital, correo, UID de Firebase, user agent ni referrer.
+
 ---
 
 # 14. Estadísticas privadas
@@ -523,6 +530,15 @@ Como mínimo:
 * preguntas respondidas/publicadas.
 
 No recopilar información personal que no sea necesaria.
+
+Implementado en Analytics V1:
+
+* resumen privado en `Admin > Estadísticas`;
+* visitas totales, del día, de la semana y del mes;
+* días calendario calculados en `America/Bogota`;
+* visitas diarias de los últimos 30 días, incluyendo días sin visitas;
+* secciones, taller, parcial y publicaciones más consultadas;
+* conteo de preguntas totales, pendientes y publicadas.
 
 ---
 

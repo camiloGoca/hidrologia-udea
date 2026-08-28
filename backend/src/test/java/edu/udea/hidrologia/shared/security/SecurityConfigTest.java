@@ -25,6 +25,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import edu.udea.hidrologia.analytics.repository.AnalyticsRepository;
+import edu.udea.hidrologia.analytics.service.AnalyticsService;
 import edu.udea.hidrologia.link.service.InterestingLinkService;
 import edu.udea.hidrologia.link.service.AdminInterestingLinkService;
 import edu.udea.hidrologia.link.dto.AdminInterestingLinkResponse;
@@ -72,6 +74,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private AdminInterestingLinkService adminInterestingLinkService;
+
+    @MockitoBean
+    private AnalyticsService analyticsService;
+
+    @MockitoBean
+    private AnalyticsRepository analyticsRepository;
 
     @MockitoBean
     private PostQueryService postQueryService;
@@ -203,6 +211,36 @@ class SecurityConfigTest {
                         }
                         """.getBytes(StandardCharsets.UTF_8))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void allowsExplicitPublicAnalyticsEndpoints() throws Exception {
+        when(analyticsService.countSiteVisits()).thenReturn(7L);
+
+        mockMvc.perform(post("/api/v1/analytics/visit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionJson()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/v1/analytics/sections/taller-1/view")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionJson()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/v1/analytics/posts/9/view")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionJson()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/analytics/visits/count"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visits").value(7));
+    }
+
+    @Test
+    void doesNotOpenUnapprovedAnalyticsRoutes() throws Exception {
+        mockMvc.perform(get("/api/v1/analytics/private"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -949,11 +987,39 @@ class SecurityConfigTest {
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    void protectsAdminAnalyticsSummary() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/analytics/summary"))
+                .andExpect(status().isUnauthorized());
+
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/analytics/summary")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/analytics/summary")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+    }
+
     private Map<String, Object> contentDocument(String content) {
         return Map.of(
                 "type", "doc",
                 "content", List.of(Map.of(
                         "type", "paragraph",
                         "content", List.of(Map.of("type", "text", "text", content)))));
+    }
+
+    private String sessionJson() {
+        return """
+                {
+                  "sessionId": "11111111-1111-4111-8111-111111111111"
+                }
+                """;
     }
 }

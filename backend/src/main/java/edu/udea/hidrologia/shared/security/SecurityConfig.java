@@ -44,6 +44,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/posts/{id}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/tags/{slug}/posts").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/questions").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/analytics/visit").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/analytics/sections/{slug}/view").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/analytics/posts/{id}/view").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/analytics/visits/count").permitAll()
                         .requestMatchers(
                                 "/api/v1/health",
                                 "/actuator/health",

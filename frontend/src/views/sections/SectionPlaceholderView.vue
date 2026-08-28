@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import PageBanner from '@/components/PageBanner.vue'
 import PostCard from '@/components/PostCard.vue'
+import { recordSectionView } from '@/services/api/analyticsService'
 import { getPostsBySection } from '@/services/api/postService'
 import type { SectionPostsResponse } from '@/types/post'
 import type { SectionType } from '@/types/section'
@@ -48,6 +49,9 @@ watch(
 
     try {
       response.value = await getPostsBySection(currentSlug)
+      if (response.value.section.type === expectedSectionType.value) {
+        void recordSectionView(currentSlug).catch(() => undefined)
+      }
     } catch {
       hasError.value = true
     } finally {

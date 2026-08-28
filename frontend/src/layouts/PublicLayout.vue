@@ -1,6 +1,29 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
+
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import { getPublicVisitCount, recordSiteVisit } from '@/services/api/analyticsService'
+
+const siteVisits = ref<number | null>(null)
+
+onMounted(() => {
+  void initializeAnalytics()
+})
+
+async function initializeAnalytics() {
+  try {
+    await recordSiteVisit()
+  } catch {
+    // Analytics must never block the public experience.
+  }
+
+  try {
+    siteVisits.value = (await getPublicVisitCount()).visits
+  } catch {
+    siteVisits.value = null
+  }
+}
 </script>
 
 <template>
@@ -11,6 +34,6 @@ import AppHeader from '@/components/AppHeader.vue'
       <RouterView />
     </main>
 
-    <AppFooter />
+    <AppFooter :site-visits="siteVisits" />
   </div>
 </template>

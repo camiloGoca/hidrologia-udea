@@ -203,7 +203,7 @@ PUT    /api/v1/admin/posts/{id}
 DELETE /api/v1/admin/posts/{id}
 
 POST   /api/v1/admin/tags
-GET    /api/v1/admin/analytics
+GET    /api/v1/admin/analytics/summary
 ```
 
 Las rutas exactas se definirán durante la implementación.
@@ -245,7 +245,7 @@ backend/src/main/resources/db/migration/
 
 V1__initial_schema.sql
 V2__add_tags.sql
-V3__add_analytics.sql
+V9__create_analytics.sql
 ```
 
 Nunca modificar una migración que ya haya sido ejecutada en producción.
@@ -381,15 +381,30 @@ updated_at
 
 ---
 
-## AnalyticsEvent
+## SiteVisit
 
 ```text
 id
 session_id
-event_type
-resource_type
-resource_id
-created_at
+visited_at
+```
+
+## SectionView
+
+```text
+id
+session_id
+section_id
+viewed_at
+```
+
+## PostView
+
+```text
+id
+session_id
+post_id
+viewed_at
 ```
 
 ---
@@ -431,8 +446,8 @@ Post
 InterestingLink
   independiente
 
-AnalyticsEvent
-  referencia recursos cuando corresponde
+site_visits, section_views y post_views
+  registran métricas anónimas e idempotentes por sesión
 ```
 
 Mientras el Post asociado esté en `DRAFT`, la StudentQuestion permanece en `PENDING`. Ese borrador bloquea archivar o rechazar la pregunta hasta que sea descartado. Descartar un borrador elimina solo el Post; no elimina la pregunta ni su attachment.
@@ -456,6 +471,8 @@ En Editor Académico EP3C las imágenes de Post que ya no están referenciadas p
 En Editor Académico EP4 la toolbar sticky se compacta para reducir la altura ocupada mientras se editan publicaciones largas. La vista previa editorial se resuelve completamente en frontend con el estado actual del formulario, incluso si está `dirty`, y reutiliza `PostContentRenderer` con la misma metadata de `PostImage` disponible en el editor. Abrir la preview no guarda, no publica, no cambia estado y no modifica `content_document`.
 
 En Admin Links V1 el profesor gestiona `interesting_links` desde `/admin/enlaces` mediante endpoints bajo `/api/v1/admin/links`. El modelo reutiliza el esquema de V2: `title`, `description`, `url`, `display_order` y `active`, sin nuevas migraciones. El endpoint público `/api/v1/links` sigue exponiendo únicamente enlaces activos ordenados por `display_order, id`.
+
+En Analytics V1 el frontend público crea un UUID anónimo por sesión de navegador usando `sessionStorage`. El backend registra una sola visita por `session_id`, una sola consulta por `session_id + section_id` y una sola consulta por `session_id + post_id`. No se guardan IP, ubicación, huella digital, correo, Firebase UID, user agent ni referrer. Las métricas privadas se consultan desde `/api/v1/admin/analytics/summary` y calculan día, semana y mes calendario en `America/Bogota`.
 
 Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
@@ -534,17 +551,15 @@ Las imágenes propias de Posts se almacenan como metadata en `post_images` y se 
 
 Las estadísticas principales serán propias del sistema.
 
-Eventos posibles:
+Modelo implementado en Analytics V1:
 
 ```text
-SITE_VISIT
-SECTION_VIEW
-POST_VIEW
-SEARCH
-QUESTION_SUBMITTED
+site_visits
+section_views
+post_views
 ```
 
-No todos tienen que implementarse desde la primera iteración.
+La búsqueda, los enlaces, las rutas administrativas y las preguntas enviadas no incrementan contadores de consulta de recursos en esta fase.
 
 ---
 
@@ -557,11 +572,11 @@ Frontend crea o conserva un identificador de sesión anónimo.
 Ejemplo conceptual:
 
 ```text
-localStorage
+sessionStorage
 session_id = UUID
 ```
 
-El backend determina cuándo registrar una nueva visita siguiendo la política que se defina durante implementación.
+El backend impone idempotencia con restricciones únicas: refrescar la página durante la misma sesión no incrementa indefinidamente las visitas ni las consultas del mismo recurso.
 
 No utilizar fingerprinting invasivo.
 

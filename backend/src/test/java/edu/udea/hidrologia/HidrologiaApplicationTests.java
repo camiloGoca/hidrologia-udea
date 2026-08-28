@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import edu.udea.hidrologia.analytics.repository.AnalyticsRepository;
 import edu.udea.hidrologia.link.repository.InterestingLinkRepository;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.controller.AdminPostController;
@@ -42,6 +43,9 @@ class HidrologiaApplicationTests {
 
     @MockitoBean
     private QuestionAttachmentRepository questionAttachmentRepository;
+
+    @MockitoBean
+    private AnalyticsRepository analyticsRepository;
 
     @Autowired
     private ApplicationContext applicationContext;

@@ -16,6 +16,7 @@ import AdminPostsView from '@/views/admin/AdminPostsView.vue'
 import AdminHashtagsView from '@/views/admin/AdminHashtagsView.vue'
 import AdminLinksView from '@/views/admin/AdminLinksView.vue'
 import AdminLoginView from '@/views/admin/AdminLoginView.vue'
+import AdminAnalyticsView from '@/views/admin/AdminAnalyticsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
 import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
@@ -127,6 +128,11 @@ const router = createRouter({
           path: 'enlaces',
           name: 'admin-links',
           component: AdminLinksView,
+        },
+        {
+          path: 'estadisticas',
+          name: 'admin-analytics',
+          component: AdminAnalyticsView,
         },
       ],
     },

@@ -49,6 +49,11 @@ describe('router', () => {
       routes.some((route) => route.path === '/admin/enlaces' && route.name === 'admin-links'),
     ).toBe(true)
     expect(
+      routes.some(
+        (route) => route.path === '/admin/estadisticas' && route.name === 'admin-analytics',
+      ),
+    ).toBe(true)
+    expect(
       routes.some((route) => route.path === '/:pathMatch(.*)*' && route.name === 'not-found'),
     ).toBe(true)
   })
@@ -59,11 +64,13 @@ describe('router', () => {
     const postRoute = router.resolve('/admin/publicaciones/9')
     const tagsRoute = router.resolve('/admin/hashtags')
     const linksRoute = router.resolve('/admin/enlaces')
+    const analyticsRoute = router.resolve('/admin/estadisticas')
 
     expect(adminRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(detailRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(postRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(tagsRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
     expect(linksRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
+    expect(analyticsRoute.matched.some((record) => Boolean(record.beforeEnter))).toBe(true)
   })
 })

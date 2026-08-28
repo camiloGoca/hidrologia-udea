@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import HashtagChip from '@/components/HashtagChip.vue'
 import PostContentRenderer from '@/components/PostContentRenderer'
+import { recordPostView } from '@/services/api/analyticsService'
 import { getPostById } from '@/services/api/postService'
 import type { PostDetail } from '@/types/post'
 
@@ -41,6 +42,7 @@ watch(
 
     try {
       post.value = await getPostById(currentId)
+      void recordPostView(currentId).catch(() => undefined)
     } catch {
       hasError.value = true
     } finally {

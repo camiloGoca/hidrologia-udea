@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import udeaLogoUrl from '@/assets/brand/logo-udea.png'
+
+defineProps<{
+  siteVisits?: number | null
+}>()
 </script>
 
 <template>
@@ -42,8 +46,13 @@ import udeaLogoUrl from '@/assets/brand/logo-udea.png'
       </div>
 
       <div class="border-t border-white/10">
-        <div class="mx-auto max-w-6xl px-5 py-4 text-sm text-slate-400 sm:px-6">
-          © Hidrología UdeA
+        <div
+          class="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <span>© Hidrología UdeA</span>
+          <span v-if="typeof siteVisits === 'number'" class="font-bold text-cyan-100">
+            Visitas al sitio: {{ siteVisits }}
+          </span>
         </div>
       </div>
     </div>

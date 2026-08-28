@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { recordPostView } from '@/services/api/analyticsService'
 import { getPostById } from '@/services/api/postService'
 import type { PostDetail } from '@/types/post'
 import PostDetailView from '@/views/posts/PostDetailView.vue'
@@ -24,7 +25,12 @@ vi.mock('@/services/api/postService', () => ({
   getPostById: vi.fn<() => Promise<PostDetail>>(),
 }))
 
+vi.mock('@/services/api/analyticsService', () => ({
+  recordPostView: vi.fn<() => Promise<void>>(),
+}))
+
 const mockedGetPostById = vi.mocked(getPostById)
+const mockedRecordPostView = vi.mocked(recordPostView)
 
 const routerLinkStub = {
   name: 'RouterLink',
@@ -65,6 +71,8 @@ describe('post detail view', () => {
   beforeEach(() => {
     routeState.params.id = '10'
     mockedGetPostById.mockReset()
+    mockedRecordPostView.mockReset()
+    mockedRecordPostView.mockResolvedValue()
   })
 
   it('renders a published post detail with section and hashtags', async () => {
@@ -76,6 +84,7 @@ describe('post detail view', () => {
     await flushPromises()
 
     expect(mockedGetPostById).toHaveBeenCalledWith('10')
+    expect(mockedRecordPostView).toHaveBeenCalledWith('10')
     expect(wrapper.text()).toContain('Pregunta publicada')
     expect(wrapper.text()).toContain('Taller 1')
     expect(wrapper.text()).toContain('Linea 1')
@@ -92,5 +101,6 @@ describe('post detail view', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('No pudimos cargar esta publicación.')
+    expect(mockedRecordPostView).not.toHaveBeenCalled()
   })
 })

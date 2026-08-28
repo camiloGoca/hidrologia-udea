@@ -63,6 +63,12 @@ async function logout() {
           >
             Enlaces
           </RouterLink>
+          <RouterLink
+            :to="{ name: 'admin-analytics' }"
+            class="rounded-2xl px-4 py-2 text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+          >
+            Estadísticas
+          </RouterLink>
           <button
             type="button"
             class="rounded-2xl bg-sky-950 px-4 py-2 text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-950 disabled:cursor-not-allowed disabled:bg-slate-400"
