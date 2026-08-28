@@ -1,0 +1,12 @@
+target/
+.git/
+.idea/
+.vscode/
+*.log
+.env
+.env.*
+*.tmp
+*.temp
+*.bak
+*.pid
+hs_err_pid*

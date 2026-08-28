@@ -81,6 +81,23 @@ URLs útiles:
 - Actuator: `http://localhost:8080/actuator/health`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
+## Backend en contenedor
+
+El backend incluye un `Dockerfile` multi-stage en `backend/`. La imagen compila con Maven y Java 17, y ejecuta solo el JAR final con JRE Java 17 y un usuario no-root.
+
+Para construir la imagen localmente:
+
+```powershell
+cd backend
+docker build -t hidrologia-backend:local .
+```
+
+La aplicación escucha el puerto indicado por `PORT` y usa `8080` como fallback local. El perfil `prod` reactiva DataSource, JPA y Flyway mediante variables de entorno (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) y mantiene Hibernate en `ddl-auto=validate`.
+
+En Cloud Run, Firebase Admin debe usar Application Default Credentials mediante la service identity del servicio. No configures `GOOGLE_APPLICATION_CREDENTIALS` con una ruta a un JSON dentro de Cloud Run.
+
+En producción, SpringDoc/Swagger queda deshabilitado y Actuator expone solo `health` sin detalles.
+
 ## Frontend
 
 ```powershell

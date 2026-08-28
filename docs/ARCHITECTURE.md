@@ -113,6 +113,8 @@ Desarrollo local:
 Producción prevista:
 
 - Neon PostgreSQL.
+- Spring Boot se ejecutará con el perfil `prod`, tomando `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` desde variables de entorno.
+- El puerto HTTP usa `PORT` con fallback `8080`, compatible con contenedores y Cloud Run.
 
 Flyway controla el esquema. Hibernate valida con `ddl-auto=validate`; no crea ni actualiza tablas.
 
@@ -356,7 +358,27 @@ VITE_FIREBASE_*
 
 `GOOGLE_APPLICATION_CREDENTIALS` lo descubre Google Application Default Credentials; la aplicación no abre ni parsea manualmente el JSON de service account.
 
-## 14. Testing
+En ejecución local esa variable puede apuntar a un JSON fuera del repositorio. En Cloud Run se debe usar la service identity del servicio para que ADC resuelva credenciales sin subir ni referenciar un JSON de service account.
+
+## 14. Preparación de contenedor y perfil productivo
+
+El backend tiene un `Dockerfile` multi-stage en `backend/`:
+
+- etapa builder con Maven y Java 17;
+- etapa runtime con JRE Java 17;
+- ejecución del JAR como usuario no-root;
+- sin copiar `.env`, credenciales ni código fuente al runtime.
+
+El perfil `prod`:
+
+- reactiva DataSource, JPA y Flyway;
+- usa PostgreSQL mediante variables de entorno;
+- mantiene `ddl-auto=validate` y `open-in-view=false`;
+- deshabilita SpringDoc/Swagger;
+- expone Actuator `health` sin detalles;
+- evita incluir stack traces, exception class y binding internals en respuestas de error estándar.
+
+## 15. Testing
 
 Backend:
 
@@ -373,7 +395,7 @@ Frontend:
 - mocks de servicios API/Firebase;
 - tests sin backend real.
 
-## 15. Gaps preproducción
+## 16. Gaps preproducción
 
 Riesgo principal pendiente:
 
