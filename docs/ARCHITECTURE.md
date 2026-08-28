@@ -14,6 +14,7 @@ PostgreSQL + Flyway
 Servicios externos:
 - Firebase Authentication / Firebase Admin SDK para el profesor.
 - Cloudinary para almacenamiento de imágenes.
+- Cloudflare Turnstile para reducir abuso en el envío público de preguntas.
 ```
 
 No se usan microservicios, colas, Redis, Elasticsearch ni Kubernetes para el MVP.
@@ -81,7 +82,8 @@ Stack:
 - Actuator;
 - SpringDoc OpenAPI;
 - Firebase Admin SDK;
-- Cloudinary Java SDK.
+- Cloudinary Java SDK;
+- Cloudflare Turnstile Siteverify mediante cliente HTTP de Spring.
 
 El backend es un monolito modular por funcionalidad:
 
@@ -221,6 +223,33 @@ Firebase:
 
 Con `FIREBASE_ENABLED=false`, tests y entornos locales sin credenciales siguen funcionando.
 
+Turnstile:
+
+- `POST /api/v1/questions` sigue siendo público en Spring Security;
+- cuando `TURNSTILE_ENABLED=true`, el backend valida el token antes de validar imagen, subir a Cloudinary o persistir;
+- el backend envía `secret` y `response` a Cloudflare Siteverify, sin `remoteip`;
+- se exige `success=true`;
+- si `TURNSTILE_EXPECTED_ACTION` está configurado, la action devuelta debe coincidir exactamente;
+- si `TURNSTILE_EXPECTED_HOSTNAMES` está configurado, el hostname devuelto debe pertenecer a esa lista;
+- si Cloudflare falla o no responde, el envío falla cerrado;
+- no se almacenan IP, fingerprint, datos Turnstile ni tokens Turnstile.
+
+Flujo:
+
+```text
+Student
+   ↓
+Turnstile browser challenge
+   ↓
+POST /api/v1/questions
+   ↓
+Spring Boot
+   ↓
+Cloudflare Siteverify
+   ↓
+validación de pregunta / imagen / persistencia
+```
+
 ## 9. Contenido académico estructurado
 
 `posts.content_document` es JSONB y es la fuente editorial de verdad.
@@ -314,7 +343,12 @@ FIREBASE_ENABLED
 FIREBASE_PROJECT_ID
 FIREBASE_ADMIN_UID
 GOOGLE_APPLICATION_CREDENTIALS
+TURNSTILE_ENABLED
+TURNSTILE_SECRET_KEY
+TURNSTILE_EXPECTED_HOSTNAMES
+TURNSTILE_EXPECTED_ACTION
 VITE_API_BASE_URL
+VITE_TURNSTILE_SITE_KEY
 VITE_FIREBASE_*
 ```
 
@@ -343,7 +377,7 @@ Frontend:
 
 Riesgo principal pendiente:
 
-- `POST /api/v1/questions` es público y acepta imagen opcional. Antes de producción conviene agregar protección anti-abuso: rate limiting, límites por sesión/origen, monitoreo y eventualmente CAPTCHA o mecanismo equivalente si el profesor lo aprueba.
+- monitoreo operativo de abuso y errores antes de abrir tráfico real de producción.
 
 Pendiente de infraestructura:
 

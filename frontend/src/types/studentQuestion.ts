@@ -10,6 +10,7 @@ export interface CreateStudentQuestionRequest {
   sectionSlug: string
   nickname: string | null
   question: string
+  turnstileToken?: string | null
 }
 
 export interface CreateStudentQuestionPayload {

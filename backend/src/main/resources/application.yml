@@ -43,6 +43,11 @@ hidrologia:
     enabled: ${FIREBASE_ENABLED:false}
     project-id: ${FIREBASE_PROJECT_ID:}
     admin-uid: ${FIREBASE_ADMIN_UID:}
+  turnstile:
+    enabled: ${TURNSTILE_ENABLED:false}
+    secret-key: ${TURNSTILE_SECRET_KEY:}
+    expected-hostnames: ${TURNSTILE_EXPECTED_HOSTNAMES:}
+    expected-action: ${TURNSTILE_EXPECTED_ACTION:}
   uploads:
     images:
       max-size-bytes: ${QUESTION_IMAGE_MAX_BYTES:5242880}

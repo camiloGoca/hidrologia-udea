@@ -28,6 +28,8 @@ import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
 import edu.udea.hidrologia.shared.storage.InvalidImageException;
+import edu.udea.hidrologia.shared.turnstile.TurnstileChallengeException;
+import edu.udea.hidrologia.shared.turnstile.TurnstileUnavailableException;
 import edu.udea.hidrologia.tag.service.InvalidTagRequestException;
 import edu.udea.hidrologia.tag.service.TagConflictException;
 
@@ -110,7 +112,8 @@ public class GlobalExceptionHandler {
             InvalidInterestingLinkRequestException.class,
             InvalidPostSearchQueryException.class,
             InvalidTagRequestException.class,
-            InvalidPostContentDocumentException.class
+            InvalidPostContentDocumentException.class,
+            TurnstileChallengeException.class
     })
     ResponseEntity<ApiErrorResponse> handleBadRequest(Exception exception, HttpServletRequest request) {
         HttpStatus status = HttpStatus.BAD_REQUEST;
@@ -121,6 +124,21 @@ public class GlobalExceptionHandler {
                         status.value(),
                         status.getReasonPhrase(),
                         safeMessage(exception, "Request validation failed"),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(TurnstileUnavailableException.class)
+    ResponseEntity<ApiErrorResponse> handleTurnstileUnavailable(
+            TurnstileUnavailableException exception,
+            HttpServletRequest request) {
+        HttpStatus status = HttpStatus.SERVICE_UNAVAILABLE;
+
+        return ResponseEntity.status(status)
+                .body(new ApiErrorResponse(
+                        Instant.now(),
+                        status.value(),
+                        status.getReasonPhrase(),
+                        "No pudimos verificar el envío en este momento. Intenta nuevamente.",
                         request.getRequestURI()));
     }
 

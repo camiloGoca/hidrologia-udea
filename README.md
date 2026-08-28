@@ -7,7 +7,7 @@ Aplicación web académica para apoyar la materia de Hidrología de la Universid
 - Frontend: Vue 3, TypeScript, Vite, Vue Router, Pinia, Axios, Tailwind CSS, Tiptap y Vitest.
 - Backend: Java 17, Spring Boot 4.1.x, Maven, Spring Web, Spring Security, Spring Data JPA, Flyway, Actuator y OpenAPI.
 - Datos: PostgreSQL local con Docker Compose; Neon previsto para producción.
-- Servicios externos: Firebase Authentication para el profesor y Cloudinary para imágenes.
+- Servicios externos: Firebase Authentication para el profesor, Cloudinary para imágenes y Cloudflare Turnstile para reducir abuso en preguntas públicas.
 
 ## Estructura
 
@@ -21,7 +21,7 @@ infra/      infraestructura local
 ## Configuración local
 
 1. Copia `.env.example` como `.env`.
-2. Cambia los valores locales necesarios, especialmente `POSTGRES_PASSWORD`, `DB_PASSWORD`, Firebase y Cloudinary si vas a probar esas integraciones.
+2. Cambia los valores locales necesarios, especialmente `POSTGRES_PASSWORD`, `DB_PASSWORD`, Firebase, Cloudinary y Turnstile si vas a probar esas integraciones.
 3. No guardes secretos reales en archivos versionados.
 
 Si el puerto `5432` está ocupado, cambia `POSTGRES_HOST_PORT` y usa el mismo puerto dentro de `DB_URL`:
@@ -115,8 +115,11 @@ npm run build
 - `.env` está ignorado por Git.
 - `.env.example` solo contiene placeholders.
 - El JSON de service account de Firebase debe vivir fuera del repositorio.
-- `CLOUDINARY_API_SECRET`, `FIREBASE_ADMIN_UID`, `GOOGLE_APPLICATION_CREDENTIALS` y tokens no deben llegar al frontend ni al control de versiones.
+- `CLOUDINARY_API_SECRET`, `FIREBASE_ADMIN_UID`, `GOOGLE_APPLICATION_CREDENTIALS`, `TURNSTILE_SECRET_KEY` y tokens no deben llegar al frontend ni al control de versiones.
+- Turnstile protege `POST /api/v1/questions` cuando `TURNSTILE_ENABLED=true`. El frontend usa solo `VITE_TURNSTILE_SITE_KEY`; el backend valida el token con Cloudflare Siteverify usando `TURNSTILE_SECRET_KEY`.
+- Para pruebas locales con dummy keys oficiales de Cloudflare, deja `TURNSTILE_EXPECTED_ACTION=` y `TURNSTILE_EXPECTED_HOSTNAMES=` vacíos: esas credenciales sirven para comprobar `success=true`, pero pueden devolver metadata dummy no equivalente al entorno real.
+- Para producción, configura también `TURNSTILE_EXPECTED_ACTION=student_question` y `TURNSTILE_EXPECTED_HOSTNAMES=<hostname público del frontend>` para activar validación estricta de metadata.
 
 ## Estado preproducción
 
-El producto ya cuenta con módulos públicos, autenticación del profesor, administración de contenido, imágenes en publicaciones y analíticas propias. Antes de exponer el formulario público en producción conviene agregar protección anti-abuso para `POST /api/v1/questions`, especialmente por aceptar texto e imagen opcional.
+El producto ya cuenta con módulos públicos, autenticación del profesor, administración de contenido, imágenes en publicaciones, analíticas propias y protección anti-abuso con Cloudflare Turnstile para el envío público de preguntas. Antes de producción quedan pendientes la configuración final de despliegue, secretos cloud, monitoreo y backups.

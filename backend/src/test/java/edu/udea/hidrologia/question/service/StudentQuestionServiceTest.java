@@ -13,6 +13,8 @@ import java.time.Instant;
 
 import javax.imageio.ImageIO;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,12 +33,14 @@ import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageUpload;
 import edu.udea.hidrologia.shared.storage.ImageUploadProperties;
 import edu.udea.hidrologia.shared.storage.StoredImage;
+import edu.udea.hidrologia.shared.turnstile.TurnstileChallengeException;
+import edu.udea.hidrologia.shared.turnstile.TurnstileVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class StudentQuestionServiceTest {
 
     private static final CreateStudentQuestionRequest REQUEST =
-            new CreateStudentQuestionRequest("taller-1", "Estudiante", "Pregunta de prueba");
+            new CreateStudentQuestionRequest("taller-1", "Estudiante", "Pregunta de prueba", "valid-token");
     private static final CreateStudentQuestionResponse RESPONSE =
             new CreateStudentQuestionResponse(1L, StudentQuestionStatus.PENDING, Instant.parse("2026-01-01T00:00:00Z"));
     private static final StoredImage STORED_IMAGE =
@@ -51,15 +55,22 @@ class StudentQuestionServiceTest {
     @Mock
     private ImageStorageService imageStorageService;
 
+    @Mock
+    private TurnstileVerifier turnstileVerifier;
+
     private StudentQuestionService studentQuestionService;
+    private Validator validator;
 
     @BeforeEach
     void setUp() {
         ImageUploadProperties properties = new ImageUploadProperties();
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
         studentQuestionService = new StudentQuestionService(
                 persistenceService,
                 new ImageFileValidator(properties),
-                imageStorageServiceProvider);
+                imageStorageServiceProvider,
+                turnstileVerifier,
+                validator);
     }
 
     @Test
@@ -68,6 +79,7 @@ class StudentQuestionServiceTest {
 
         studentQuestionService.createQuestion(REQUEST, null);
 
+        verify(turnstileVerifier).verifyStudentQuestion("valid-token");
         verify(persistenceService).persist(REQUEST, null);
         verifyNoInteractions(imageStorageServiceProvider, imageStorageService);
     }
@@ -84,6 +96,34 @@ class StudentQuestionServiceTest {
         verify(imageStorageService).upload(any(ImageUpload.class));
         verify(persistenceService).persist(REQUEST, STORED_IMAGE);
         verify(imageStorageService, never()).delete(any());
+    }
+
+    @Test
+    void rejectsBeforeImageValidationStorageAndPersistenceWhenTurnstileFails() throws Exception {
+        MockMultipartFile image = image("image.png", "image/png", "png");
+        org.mockito.Mockito.doThrow(new TurnstileChallengeException("Completa nuevamente la verificación"))
+                .when(turnstileVerifier)
+                .verifyStudentQuestion("invalid-token");
+
+        assertThatThrownBy(() -> studentQuestionService.createQuestion(
+                new CreateStudentQuestionRequest("taller-1", "Estudiante", "Pregunta de prueba", "invalid-token"),
+                image))
+                .isInstanceOf(TurnstileChallengeException.class);
+
+        verifyNoInteractions(imageStorageServiceProvider, imageStorageService, persistenceService);
+    }
+
+    @Test
+    void validatesRequestAfterTurnstileVerification() {
+        CreateStudentQuestionRequest invalidRequest =
+                new CreateStudentQuestionRequest("taller-1", "Estudiante", "   ", "valid-token");
+
+        assertThatThrownBy(() -> studentQuestionService.createQuestion(invalidRequest, null))
+                .isInstanceOf(jakarta.validation.ConstraintViolationException.class)
+                .hasMessageContaining("Request validation failed");
+
+        verify(turnstileVerifier).verifyStudentQuestion("valid-token");
+        verifyNoInteractions(imageStorageServiceProvider, imageStorageService, persistenceService);
     }
 
     @Test

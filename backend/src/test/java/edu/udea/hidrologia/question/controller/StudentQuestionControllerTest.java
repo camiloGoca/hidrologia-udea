@@ -14,7 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Set;
 
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +35,8 @@ import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
+import edu.udea.hidrologia.shared.turnstile.TurnstileChallengeException;
+import edu.udea.hidrologia.shared.turnstile.TurnstileUnavailableException;
 
 class StudentQuestionControllerTest {
 
@@ -57,7 +61,8 @@ class StudentQuestionControllerTest {
                         {
                           "sectionSlug": "taller-1",
                           "nickname": "Estudiante",
-                          "question": "Pregunta de prueba"
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
                         }
                         """)))
                 .andExpect(status().isCreated())
@@ -72,6 +77,7 @@ class StudentQuestionControllerTest {
         assertThat(requestCaptor.getValue().sectionSlug()).isEqualTo("taller-1");
         assertThat(requestCaptor.getValue().nickname()).isEqualTo("Estudiante");
         assertThat(requestCaptor.getValue().question()).isEqualTo("Pregunta de prueba");
+        assertThat(requestCaptor.getValue().turnstileToken()).isEqualTo("valid-token");
     }
 
     @Test
@@ -85,7 +91,8 @@ class StudentQuestionControllerTest {
                 .file(dataPart("""
                         {
                           "sectionSlug": "taller-1",
-                          "question": "Pregunta con imagen"
+                          "question": "Pregunta con imagen",
+                          "turnstileToken": "valid-token"
                         }
                         """))
                 .file(image))
@@ -104,6 +111,7 @@ class StudentQuestionControllerTest {
                           "sectionSlug": "taller-1",
                           "nickname": "Estudiante",
                           "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token",
                           "status": "PUBLISHED"
                         }
                         """)))
@@ -117,16 +125,21 @@ class StudentQuestionControllerTest {
         assertThat(captor.getValue().sectionSlug()).isEqualTo("taller-1");
         assertThat(captor.getValue().nickname()).isEqualTo("Estudiante");
         assertThat(captor.getValue().question()).isEqualTo("Pregunta de prueba");
+        assertThat(captor.getValue().turnstileToken()).isEqualTo("valid-token");
     }
 
     @Test
     void returnsBadRequestForEmptyQuestion() throws Exception {
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), isNull()))
+                .thenThrow(new ConstraintViolationException("Request validation failed", Set.of()));
+
         mockMvc.perform(multipart("/api/v1/questions")
                 .file(dataPart("""
                         {
                           "sectionSlug": "taller-1",
                           "nickname": "Estudiante",
-                          "question": "   "
+                          "question": "   ",
+                          "turnstileToken": "valid-token"
                         }
                         """)))
                 .andExpect(status().isBadRequest())
@@ -136,12 +149,15 @@ class StudentQuestionControllerTest {
     @Test
     void returnsBadRequestForQuestionThatIsTooLong() throws Exception {
         String longQuestion = "a".repeat(2001);
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), isNull()))
+                .thenThrow(new ConstraintViolationException("Request validation failed", Set.of()));
 
         mockMvc.perform(multipart("/api/v1/questions")
                 .file(dataPart("""
                         {
                           "sectionSlug": "taller-1",
-                          "question": "%s"
+                          "question": "%s",
+                          "turnstileToken": "valid-token"
                         }
                         """.formatted(longQuestion))))
                 .andExpect(status().isBadRequest())
@@ -150,6 +166,9 @@ class StudentQuestionControllerTest {
 
     @Test
     void returnsBadRequestForInvalidRequest() throws Exception {
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), isNull()))
+                .thenThrow(new ConstraintViolationException("Request validation failed", Set.of()));
+
         mockMvc.perform(multipart("/api/v1/questions")
                 .file(dataPart("{}")))
                 .andExpect(status().isBadRequest());
@@ -164,7 +183,8 @@ class StudentQuestionControllerTest {
                 .file(dataPart("""
                         {
                           "sectionSlug": "no-existe",
-                          "question": "Pregunta de prueba"
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
                         }
                         """)))
                 .andExpect(status().isNotFound())
@@ -180,7 +200,8 @@ class StudentQuestionControllerTest {
                 .file(dataPart("""
                         {
                           "sectionSlug": "taller-1",
-                          "question": "Pregunta de prueba"
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
                         }
                         """))
                 .file(new MockMultipartFile("image", "image.png", "image/png", new byte[] {1, 2, 3})))
@@ -197,12 +218,49 @@ class StudentQuestionControllerTest {
                 .file(dataPart("""
                         {
                           "sectionSlug": "taller-1",
-                          "question": "Pregunta de prueba"
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
                         }
                         """))
                 .file(new MockMultipartFile("image", "image.png", "image/png", new byte[] {1, 2, 3})))
                 .andExpect(status().isContentTooLarge())
                 .andExpect(jsonPath("$.message", is("The uploaded image exceeds the maximum size")));
+    }
+
+    @Test
+    void returnsBadRequestWhenTurnstileChallengeFails() throws Exception {
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), isNull()))
+                .thenThrow(new TurnstileChallengeException(
+                        "Completa nuevamente la verificación y vuelve a intentarlo."));
+
+        mockMvc.perform(multipart("/api/v1/questions")
+                .file(dataPart("""
+                        {
+                          "sectionSlug": "taller-1",
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "invalid-token"
+                        }
+                        """)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Completa nuevamente la verificación y vuelve a intentarlo.")));
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenTurnstileCannotBeVerified() throws Exception {
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), isNull()))
+                .thenThrow(new TurnstileUnavailableException("service unavailable"));
+
+        mockMvc.perform(multipart("/api/v1/questions")
+                .file(dataPart("""
+                        {
+                          "sectionSlug": "taller-1",
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
+                        }
+                        """)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message", is(
+                        "No pudimos verificar el envío en este momento. Intenta nuevamente.")));
     }
 
     @Test
@@ -212,7 +270,8 @@ class StudentQuestionControllerTest {
                 .content("""
                         {
                           "sectionSlug": "taller-1",
-                          "question": "Pregunta de prueba"
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
                         }
                         """))
                 .andExpect(status().isUnsupportedMediaType());

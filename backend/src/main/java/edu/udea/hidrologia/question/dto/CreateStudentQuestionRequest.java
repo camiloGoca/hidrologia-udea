@@ -13,5 +13,7 @@ public record CreateStudentQuestionRequest(
 
         @NotBlank(message = "Question is required")
         @Size(max = 2000, message = "Question must be 2000 characters or less")
-        String question) {
+        String question,
+
+        String turnstileToken) {
 }

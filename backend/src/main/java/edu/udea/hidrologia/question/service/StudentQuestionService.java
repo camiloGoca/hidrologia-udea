@@ -1,7 +1,11 @@
 package edu.udea.hidrologia.question.service;
 
 import java.util.Optional;
+import java.util.Set;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -15,6 +19,7 @@ import edu.udea.hidrologia.shared.storage.ImageStorageService;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageUpload;
 import edu.udea.hidrologia.shared.storage.StoredImage;
+import edu.udea.hidrologia.shared.turnstile.TurnstileVerifier;
 
 @Service
 public class StudentQuestionService {
@@ -24,17 +29,26 @@ public class StudentQuestionService {
     private final StudentQuestionPersistenceService persistenceService;
     private final ImageFileValidator imageFileValidator;
     private final ObjectProvider<ImageStorageService> imageStorageServiceProvider;
+    private final TurnstileVerifier turnstileVerifier;
+    private final Validator validator;
 
     public StudentQuestionService(
             StudentQuestionPersistenceService persistenceService,
             ImageFileValidator imageFileValidator,
-            ObjectProvider<ImageStorageService> imageStorageServiceProvider) {
+            ObjectProvider<ImageStorageService> imageStorageServiceProvider,
+            TurnstileVerifier turnstileVerifier,
+            Validator validator) {
         this.persistenceService = persistenceService;
         this.imageFileValidator = imageFileValidator;
         this.imageStorageServiceProvider = imageStorageServiceProvider;
+        this.turnstileVerifier = turnstileVerifier;
+        this.validator = validator;
     }
 
     public CreateStudentQuestionResponse createQuestion(CreateStudentQuestionRequest request, MultipartFile image) {
+        turnstileVerifier.verifyStudentQuestion(request.turnstileToken());
+        validateRequest(request);
+
         Optional<ImageUpload> imageUpload = imageFileValidator.validateOptional(image);
 
         if (imageUpload.isEmpty()) {
@@ -53,6 +67,13 @@ public class StudentQuestionService {
         } catch (RuntimeException exception) {
             compensateUploadedImage(imageStorageService, storedImage.publicId(), exception);
             throw exception;
+        }
+    }
+
+    private void validateRequest(CreateStudentQuestionRequest request) {
+        Set<ConstraintViolation<CreateStudentQuestionRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            throw new ConstraintViolationException("Request validation failed", violations);
         }
     }
 

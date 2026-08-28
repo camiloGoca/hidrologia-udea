@@ -177,7 +177,8 @@ Campos:
 - nickname opcional;
 - sección obligatoria;
 - pregunta obligatoria;
-- imagen opcional JPEG/PNG.
+- imagen opcional JPEG/PNG;
+- verificación anti-abuso mediante Cloudflare Turnstile.
 
 Reglas:
 
@@ -185,7 +186,13 @@ Reglas:
 - toda pregunta nace con estado `PENDING`;
 - el estudiante no elige estado;
 - preguntas pendientes no son contenido público;
-- no existe listado público de preguntas.
+- no existe listado público de preguntas;
+- si Turnstile falla, la pregunta no se crea y la imagen no se sube.
+
+Privacidad:
+
+- no se almacenan IP, fingerprint, datos Turnstile ni tokens Turnstile;
+- Turnstile se usa exclusivamente como barrera anti-abuso del formulario público.
 
 Estados:
 
@@ -240,7 +247,6 @@ Las rutas administrativas viven bajo `/api/v1/admin/**` y requieren rol `ADMIN`.
 
 Antes de producción pública se recomienda priorizar:
 
-- protección anti-abuso para `POST /api/v1/questions`, especialmente por aceptar imágenes;
 - revisión final de despliegue Firebase Hosting + Cloud Run + Neon;
 - configuración de secretos en infraestructura cloud;
 - backups/retención de base de datos;

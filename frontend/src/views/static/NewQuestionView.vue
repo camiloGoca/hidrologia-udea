@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import PageBanner from '@/components/PageBanner.vue'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import { getTurnstileSiteKey, TURNSTILE_ACTION } from '@/config/turnstile'
 import { createQuestion } from '@/services/api/questionService'
 import { getSections } from '@/services/api/sectionService'
 import type { Section } from '@/types/section'
@@ -21,6 +23,11 @@ const submitState = ref<SubmitState>('INITIAL')
 const selectedImage = ref<File | null>(null)
 const imagePreviewUrl = ref<string | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
+const turnstileWidget = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstileToken = ref('')
+const turnstileError = ref('')
+const submitErrorMessage = ref('Revisa los campos e intenta nuevamente en unos momentos.')
+const turnstileSiteKey = getTurnstileSiteKey()
 
 const form = reactive({
   nickname: '',
@@ -39,7 +46,10 @@ const talleres = computed(() => sections.value.filter((section) => section.type 
 const parciales = computed(() => sections.value.filter((section) => section.type === 'PARCIAL'))
 const questionLength = computed(() => form.question.length)
 const isSubmitting = computed(() => submitState.value === 'SUBMITTING')
-const canSubmit = computed(() => !isSubmitting.value && !isLoadingSections.value)
+const isTurnstileEnabled = computed(() => Boolean(turnstileSiteKey))
+const canSubmit = computed(
+  () => !isSubmitting.value && !isLoadingSections.value && (!isTurnstileEnabled.value || Boolean(turnstileToken.value)),
+)
 const selectedImageSize = computed(() =>
   selectedImage.value ? formatFileSize(selectedImage.value.size) : '',
 )
@@ -67,6 +77,7 @@ async function submitQuestion() {
   }
 
   submitState.value = 'INITIAL'
+  submitErrorMessage.value = 'Revisa los campos e intenta nuevamente en unos momentos.'
 
   if (!validateForm()) {
     return
@@ -80,6 +91,7 @@ async function submitQuestion() {
         sectionSlug: form.sectionSlug,
         nickname: normalizeOptionalText(form.nickname),
         question: form.question.trim(),
+        turnstileToken: turnstileToken.value || null,
       },
       image: selectedImage.value,
     })
@@ -87,8 +99,11 @@ async function submitQuestion() {
     form.sectionSlug = ''
     form.question = ''
     clearSelectedImage()
+    resetTurnstile()
     submitState.value = 'SUCCESS'
-  } catch {
+  } catch (error) {
+    submitErrorMessage.value = friendlySubmitError(error)
+    resetTurnstile()
     submitState.value = 'ERROR'
   }
 }
@@ -97,6 +112,7 @@ function validateForm() {
   errors.sectionSlug = ''
   errors.question = ''
   errors.nickname = ''
+  turnstileError.value = ''
 
   if (!form.sectionSlug) {
     errors.sectionSlug = 'Selecciona una sección.'
@@ -116,7 +132,65 @@ function validateForm() {
     errors.image = validateImage(selectedImage.value)
   }
 
-  return !errors.sectionSlug && !errors.question && !errors.nickname && !errors.image
+  if (isTurnstileEnabled.value && !turnstileToken.value) {
+    turnstileError.value = 'Completa la verificación antes de enviar tu pregunta.'
+  }
+
+  return !errors.sectionSlug && !errors.question && !errors.nickname && !errors.image && !turnstileError.value
+}
+
+function handleTurnstileVerified(token: string) {
+  turnstileToken.value = token
+  turnstileError.value = ''
+}
+
+function handleTurnstileExpired() {
+  turnstileToken.value = ''
+  turnstileError.value = 'Completa nuevamente la verificación y vuelve a intentarlo.'
+}
+
+function handleTurnstileError() {
+  turnstileToken.value = ''
+  turnstileError.value = 'No pudimos cargar la verificación. Intenta recargar la página.'
+}
+
+function resetTurnstile() {
+  if (!isTurnstileEnabled.value) {
+    return
+  }
+
+  turnstileToken.value = ''
+  turnstileWidget.value?.reset()
+}
+
+function friendlySubmitError(error: unknown) {
+  const status = responseStatus(error)
+
+  if (status === 503) {
+    return 'No pudimos verificar el envío en este momento. Intenta nuevamente.'
+  }
+
+  if (status === 400 && responseMessage(error)?.includes('verificación')) {
+    return 'Completa nuevamente la verificación y vuelve a intentarlo.'
+  }
+
+  return 'Revisa los campos e intenta nuevamente en unos momentos.'
+}
+
+function responseStatus(error: unknown) {
+  if (typeof error !== 'object' || error === null || !('response' in error)) {
+    return undefined
+  }
+
+  return (error as { response?: { status?: number } }).response?.status
+}
+
+function responseMessage(error: unknown) {
+  if (typeof error !== 'object' || error === null || !('response' in error)) {
+    return undefined
+  }
+
+  return (error as { response?: { data?: { message?: string } } }).response?.data?.message
 }
 
 function normalizeOptionalText(value: string) {
@@ -228,7 +302,7 @@ function formatFileSize(size: number) {
           role="alert"
         >
           <p class="font-black">No pudimos enviar tu pregunta.</p>
-          <p class="mt-2 text-sm leading-6">Revisa los campos e intenta nuevamente en unos momentos.</p>
+          <p class="mt-2 text-sm leading-6">{{ submitErrorMessage }}</p>
         </div>
 
         <div class="mt-8 grid gap-7">
@@ -367,6 +441,20 @@ function formatFileSize(size: number) {
             </div>
           </div>
         </div>
+
+        <TurnstileWidget
+          v-if="isTurnstileEnabled"
+          ref="turnstileWidget"
+          class="mt-8"
+          :site-key="turnstileSiteKey"
+          :action="TURNSTILE_ACTION"
+          @verified="handleTurnstileVerified"
+          @expired="handleTurnstileExpired"
+          @error="handleTurnstileError"
+        />
+        <p v-if="turnstileError" class="mt-3 text-sm font-bold text-red-800" role="alert">
+          {{ turnstileError }}
+        </p>
 
         <button
           type="submit"

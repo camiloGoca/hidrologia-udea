@@ -33,6 +33,7 @@ describe('questionService', () => {
           sectionSlug: 'taller-1',
           nickname: 'Estudiante',
           question: 'Pregunta de prueba',
+          turnstileToken: 'valid-turnstile-token',
         },
       }),
     ).resolves.toEqual(response)
@@ -41,6 +42,12 @@ describe('questionService', () => {
     const formData = postedFormData()
 
     expect(formData.get('data')).toBeInstanceOf(Blob)
+    await expect(postedJson()).resolves.toEqual({
+      sectionSlug: 'taller-1',
+      nickname: 'Estudiante',
+      question: 'Pregunta de prueba',
+      turnstileToken: 'valid-turnstile-token',
+    })
     expect(formData.has('image')).toBe(false)
   })
 
@@ -59,6 +66,7 @@ describe('questionService', () => {
         sectionSlug: 'taller-1',
         nickname: null,
         question: 'Pregunta de prueba',
+        turnstileToken: null,
       },
       image,
     })
@@ -81,6 +89,7 @@ describe('questionService', () => {
       sectionSlug: 'taller-1',
       nickname: null,
       question: 'Pregunta de prueba',
+      turnstileToken: null,
     })
 
     expect(mockedPost).toHaveBeenCalledWith('/questions', expect.any(FormData))
@@ -92,4 +101,11 @@ function postedFormData() {
   expect(call).toBeDefined()
 
   return call![1] as FormData
+}
+
+async function postedJson() {
+  const data = postedFormData().get('data')
+  expect(data).toBeInstanceOf(Blob)
+
+  return JSON.parse(await (data as Blob).text()) as unknown
 }

@@ -65,7 +65,7 @@ class StudentQuestionPersistenceServiceTest {
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 10L));
 
         CreateStudentQuestionResponse response = persistenceService.persist(
-                new CreateStudentQuestionRequest(" taller-1 ", "  Estudiante  ", "  Como calculo el area?  "),
+                new CreateStudentQuestionRequest(" taller-1 ", "  Estudiante  ", "  Como calculo el area?  ", null),
                 null);
 
         ArgumentCaptor<StudentQuestion> captor = ArgumentCaptor.forClass(StudentQuestion.class);
@@ -91,7 +91,7 @@ class StudentQuestionPersistenceServiceTest {
         when(studentQuestionRepository.save(any(StudentQuestion.class)))
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 11L));
 
-        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", null, "Pregunta anonima"), null);
+        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", null, "Pregunta anonima", null), null);
 
         ArgumentCaptor<StudentQuestion> captor = ArgumentCaptor.forClass(StudentQuestion.class);
         verify(studentQuestionRepository).save(captor.capture());
@@ -106,7 +106,7 @@ class StudentQuestionPersistenceServiceTest {
         when(studentQuestionRepository.save(any(StudentQuestion.class)))
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 12L));
 
-        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", "   ", "Pregunta anonima"), null);
+        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", "   ", "Pregunta anonima", null), null);
 
         ArgumentCaptor<StudentQuestion> captor = ArgumentCaptor.forClass(StudentQuestion.class);
         verify(studentQuestionRepository).save(captor.capture());
@@ -128,7 +128,7 @@ class StudentQuestionPersistenceServiceTest {
         when(studentQuestionRepository.save(any(StudentQuestion.class)))
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 13L));
 
-        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", "", "Pregunta con imagen"), image);
+        persistenceService.persist(new CreateStudentQuestionRequest("taller-1", "", "Pregunta con imagen", null), image);
 
         ArgumentCaptor<QuestionAttachment> captor = ArgumentCaptor.forClass(QuestionAttachment.class);
         verify(questionAttachmentRepository).save(captor.capture());
@@ -149,7 +149,7 @@ class StudentQuestionPersistenceServiceTest {
         when(sectionRepository.findBySlugAndActiveTrue("taller-inactivo")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> persistenceService.persist(
-                new CreateStudentQuestionRequest("taller-inactivo", "Estudiante", "Pregunta"),
+                new CreateStudentQuestionRequest("taller-inactivo", "Estudiante", "Pregunta", null),
                 null))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Section not found");
