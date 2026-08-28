@@ -1,697 +1,257 @@
-# PRODUCT_SPEC.md — Hidrología UdeA
+# Product Spec — Hidrología UdeA
 
-## 1. Visión del producto
+## 1. Visión
 
-Hidrología UdeA será una plataforma web académica destinada a servir como base de conocimiento para los estudiantes de la materia de Hidrología de la Universidad de Antioquia.
+Hidrología UdeA es una plataforma académica para la materia de Hidrología de la Universidad de Antioquia. Centraliza recursos del curso, publicaciones del profesor, respuestas a preguntas frecuentes, enlaces de interés y estadísticas de uso.
 
-El profesor podrá documentar preguntas frecuentes, procedimientos y soluciones utilizando texto, imágenes y capturas de pantalla.
+El producto debe crecer semestre tras semestre a partir de las preguntas reales de los estudiantes y del trabajo editorial del profesor.
 
-Los estudiantes podrán consultar ese conocimiento y enviar nuevas preguntas cuando no encuentren una respuesta.
+## 2. Usuarios
 
-La plataforma deberá crecer semestre tras semestre a partir de las preguntas reales de los estudiantes.
+### Estudiante
 
----
-
-# 2. Usuarios
-
-## Estudiante
-
-No necesita registrarse ni iniciar sesión.
+No necesita cuenta ni inicio de sesión.
 
 Puede:
 
-* consultar contenido;
-* navegar entre talleres;
-* navegar entre parciales;
-* consultar enlaces de interés;
-* buscar publicaciones;
-* explorar hashtags;
-* enviar preguntas;
-* utilizar nickname;
-* preguntar anónimamente;
-* adjuntar una imagen a una pregunta;
-* consultar el contador público de visitas.
+- consultar la página principal;
+- navegar por Talleres y Parciales;
+- leer publicaciones públicas;
+- buscar publicaciones por título, contenido y hashtags;
+- explorar páginas públicas de hashtags;
+- consultar enlaces de interés activos;
+- enviar una pregunta con nickname opcional o de forma anónima;
+- adjuntar una imagen JPEG/PNG a una pregunta;
+- generar métricas anónimas de uso por sesión.
 
-## Profesor / Administrador
+### Profesor / Administrador
 
-Es el único usuario que necesita autenticación.
+Es el único usuario autenticado. La autenticación usa Firebase Authentication y la autorización final depende del UID configurado en el backend.
 
 Puede:
 
-* iniciar sesión;
-* consultar preguntas recibidas;
-* responder preguntas;
-* publicar preguntas y soluciones;
-* crear publicaciones directamente;
-* editar publicaciones;
-* eliminar publicaciones;
-* asignar hashtags;
-* crear hashtags;
-* administrar enlaces de interés;
-* consultar estadísticas privadas.
+- iniciar sesión en el panel privado;
+- revisar preguntas recibidas;
+- convertir preguntas en borradores de publicación;
+- crear publicaciones manuales sin pregunta de origen;
+- editar contenido académico con editor estructurado;
+- subir y gestionar imágenes propias de publicaciones;
+- publicar, archivar, restaurar y descartar borradores según reglas de dominio;
+- crear, renombrar y eliminar hashtags no usados;
+- asignar hashtags a publicaciones;
+- administrar enlaces de interés;
+- consultar estadísticas privadas.
 
----
+## 3. Página principal
 
-# 3. Página principal
+La página inicial es el punto de entrada público. Debe mantener una identidad académica asociada a Hidrología UdeA y ofrecer acceso claro a:
 
-La página inicial funcionará como punto de entrada al sitio.
+- Enlaces de interés;
+- Talleres;
+- Parciales;
+- Agregar una pregunta;
+- búsqueda pública desde la navegación.
 
-Debe conservar un carácter académico relacionado con Hidrología y la Universidad de Antioquia.
+## 4. Talleres y parciales
 
-Debe mostrar tres accesos principales:
+Las secciones públicas son:
 
-## Enlaces de interés
+- Taller 1: Morfometría de cuencas.
+- Taller 2: Estadística y balance hídrico.
+- Taller 3: Curva de duración de caudales.
+- Parcial 1.
+- Parcial 2.
+- Parcial 3.
 
-Acceso a recursos generales seleccionados por el profesor.
+Cada sección muestra únicamente publicaciones con estado `PUBLISHED` asociadas a esa sección. Si no hay publicaciones, se muestra un estado vacío, no un error.
 
-## Talleres
+## 5. Publicaciones
 
-Acceso a:
+Una publicación puede nacer de una pregunta estudiantil o ser creada manualmente por el profesor.
 
-### Taller 1
+Una publicación contiene:
 
-Morfometría de cuencas.
+- título;
+- contenido textual derivado;
+- documento estructurado editorial;
+- sección;
+- estado;
+- fechas de creación, actualización y publicación;
+- hashtags;
+- imágenes embebibles propias del Post;
+- referencia opcional a una pregunta de origen.
 
-### Taller 2
+Estados:
 
-Estadística y balance hídrico.
+- `DRAFT`: editable, no público.
+- `PUBLISHED`: visible para estudiantes.
+- `ARCHIVED`: conservado en admin, no público.
 
-### Taller 3
+Reglas:
 
-Curva de duración de caudales.
+- crear manualmente una publicación siempre produce un `DRAFT`;
+- publicar un borrador lo vuelve visible;
+- archivar oculta una publicación sin borrarla;
+- restaurar vuelve a publicar una publicación archivada;
+- descartar por endpoint está limitado a borradores manuales sin pregunta de origen;
+- no existe hard-delete público de publicaciones publicadas como funcionalidad de producto.
 
-## Parciales
+## 6. Editor académico
 
-Acceso a:
+El editor administrativo es visual y estructurado. No expone Markdown al profesor ni acepta HTML libre.
 
-* Parcial 1.
-* Parcial 2.
-* Parcial 3.
+Soporta:
 
-La página también deberá ofrecer acceso visible a:
+- párrafos;
+- H2 y H3;
+- negrita, cursiva y subrayado;
+- listas;
+- citas;
+- enlaces seguros;
+- alineaciones controladas;
+- tamaños controlados;
+- colores y resaltados controlados;
+- bloques académicos: Nota, Ejemplo e Importante;
+- imágenes insertables con texto alternativo, caption y tamaño visual controlado;
+- vista previa con el estado local del formulario, incluso sin guardar;
+- guardado manual.
 
-**Agregar una pregunta**
+El renderer público usa el documento estructurado validado por backend y no usa `v-html`.
 
----
+## 7. Imágenes
 
-# 4. Talleres y parciales
+Cloudinary almacena los binarios. PostgreSQL guarda únicamente metadata y referencias.
 
-Cada taller o parcial tendrá su propia sección.
+Preguntas:
 
-Dentro de una sección se mostrarán las publicaciones asociadas.
+- permiten máximo una imagen JPEG/PNG;
+- la imagen permanece privada al flujo administrativo;
+- `QuestionAttachment` no se copia automáticamente a publicaciones.
 
-Ejemplo:
+Publicaciones:
 
-`Talleres > Taller 1 > Publicaciones`
+- usan `PostImage`, separado de `QuestionAttachment`;
+- las imágenes pertenecen a un Post;
+- las imágenes no utilizadas pueden eliminarse explícitamente;
+- las imágenes referenciadas por el documento no pueden eliminarse;
+- descartar un borrador con imágenes limpia Cloudinary, metadata y Post de forma controlada;
+- un `NOT_FOUND` remoto durante limpieza se trata como resultado idempotente.
 
-Una publicación podrá contener:
+## 8. Hashtags
 
-* título o pregunta;
-* solución;
-* contenido con formato;
-* imágenes;
-* hashtags;
-* fecha de publicación;
-* número de visualizaciones si posteriormente se decide mostrarlo.
+Solo el profesor gestiona hashtags.
 
----
+Un hashtag tiene:
 
-# 5. Publicaciones
+- `id`;
+- `name`;
+- `slug`.
 
-El profesor podrá crear publicaciones independientemente de las preguntas de los estudiantes.
+Reglas:
 
-Una publicación deberá tener como mínimo:
+- el slug se genera al crear desde el nombre;
+- el slug es inmutable al renombrar para conservar URLs públicas;
+- nombres duplicados case-insensitive no se aceptan;
+- colisiones de slug no se aceptan;
+- `usageCount` cuenta relaciones con publicaciones `DRAFT`, `PUBLISHED` y `ARCHIVED`;
+- un hashtag usado no se elimina hasta quitarlo de las publicaciones.
 
-* título;
-* contenido;
-* sección;
-* fecha de creación;
-* estado.
+## 9. Enlaces de interés
 
-Podrá tener:
+El profesor administra enlaces externos con:
 
-* una o más imágenes;
-* uno o más hashtags;
-* referencia a una pregunta de estudiante que la originó.
+- título;
+- descripción opcional;
+- URL HTTP/HTTPS;
+- orden;
+- estado activo/inactivo.
 
-El profesor podrá:
+La página pública muestra únicamente enlaces activos ordenados por `display_order`.
 
-* crear;
-* consultar;
-* editar;
-* publicar;
-* eliminar.
+## 10. Preguntas de estudiantes
 
----
+El formulario público permite enviar preguntas sin cuenta.
 
-# 6. Hashtags
+Campos:
 
-Los hashtags ayudan a organizar preguntas relacionadas.
+- nickname opcional;
+- sección obligatoria;
+- pregunta obligatoria;
+- imagen opcional JPEG/PNG.
 
-Ejemplo:
+Reglas:
 
-`#Morfometría`
+- nickname vacío se guarda como `null` y representa anonimato;
+- toda pregunta nace con estado `PENDING`;
+- el estudiante no elige estado;
+- preguntas pendientes no son contenido público;
+- no existe listado público de preguntas.
 
-`#Cuencas`
+Estados:
 
-`#BalanceHídrico`
+- `PENDING`: espera revisión.
+- `PUBLISHED`: fue procesada/publicada mediante un Post.
+- `ARCHIVED`: se conserva fuera del flujo activo.
+- `REJECTED`: no será publicada.
 
-`#Caudales`
+## 11. Búsqueda pública
 
-Una publicación puede contener varios hashtags.
+La búsqueda pública consulta únicamente publicaciones `PUBLISHED`.
 
-Al seleccionar un hashtag, el estudiante debe poder consultar las publicaciones relacionadas.
+Debe buscar por:
 
-## Regla
+- título;
+- contenido textual derivado;
+- hashtags.
 
-Solo el profesor puede crear y administrar hashtags.
+La búsqueda es case-insensitive, acepta coincidencias parciales y conserva `q` en la URL para recarga y navegación back/forward.
 
-Los estudiantes no pueden crear hashtags cuando envían una pregunta.
+## 12. Estadísticas
 
-Al editar una publicación, el sistema debe sugerir hashtags existentes para favorecer su reutilización y evitar duplicados.
+Las estadísticas son propias del backend y se almacenan en PostgreSQL.
 
-Los hashtags deben manejarse de manera que no existan duplicados únicamente por diferencias de mayúsculas/minúsculas.
+Se registra:
 
----
+- visita pública de sitio por sesión anónima;
+- consulta de sección por sesión;
+- consulta de publicación por sesión.
 
-# 7. Buscador
+No se recolectan IP, ubicación, huella digital, correo, UID de Firebase, user agent ni referrer.
 
-La aplicación tendrá un buscador público.
+El panel privado muestra:
 
-Debe permitir localizar contenido utilizando al menos:
+- visitas totales;
+- visitas de hoy, semana y mes;
+- visitas diarias;
+- secciones más consultadas;
+- taller y parcial más consultado;
+- publicaciones más consultadas;
+- conteo de preguntas totales, pendientes y publicadas.
 
-* título;
-* texto de la publicación;
-* hashtags.
+## 13. Autenticación y administración
 
-Posteriormente podrá incorporar filtros por sección.
+El panel administrativo requiere login del profesor mediante Firebase Web SDK en frontend y Firebase Admin SDK en backend.
 
-Ejemplo de búsqueda:
+La autorización no depende del email. El backend compara el UID del token con `FIREBASE_ADMIN_UID`.
 
-`cuenca`
+Las rutas administrativas viven bajo `/api/v1/admin/**` y requieren rol `ADMIN`.
 
-Puede devolver:
+## 14. Gaps preproducción
 
-* publicaciones que contengan "cuenca";
-* publicaciones con hashtags relacionados.
+Antes de producción pública se recomienda priorizar:
 
----
+- protección anti-abuso para `POST /api/v1/questions`, especialmente por aceptar imágenes;
+- revisión final de despliegue Firebase Hosting + Cloud Run + Neon;
+- configuración de secretos en infraestructura cloud;
+- backups/retención de base de datos;
+- monitoreo básico de errores.
 
-# 8. Agregar una pregunta
+No son parte del producto actual:
 
-Los estudiantes podrán enviar preguntas sin registrarse.
-
-El formulario deberá contener:
-
-## Identificación
-
-Dos posibilidades:
-
-### Nickname
-
-El estudiante escribe voluntariamente un apodo.
-
-### Anónimo
-
-El estudiante selecciona que no desea identificarse.
-
-No debe requerirse nombre real, correo electrónico ni cuenta.
-
-## Categoría
-
-El estudiante deberá indicar dónde se relaciona la pregunta.
-
-Opciones:
-
-* Taller 1.
-* Taller 2.
-* Taller 3.
-* Parcial 1.
-* Parcial 2.
-* Parcial 3.
-
-## Pregunta
-
-Campo obligatorio.
-
-## Imagen
-
-Opcional.
-
-Permitirá adjuntar una captura de pantalla o imagen relacionada con la duda.
-
----
-
-# 9. Estado de las preguntas
-
-Una pregunta enviada por un estudiante NO se publica automáticamente.
-
-Inicialmente queda en estado:
-
-`PENDING`
-
-El profesor podrá revisarla.
-
-Estados oficiales:
-
-* `PENDING`: pendiente de revisión o resolución.
-* `REJECTED`: revisada y descartada; no se elimina físicamente ni se elimina su imagen adjunta.
-* `ARCHIVED`: pregunta válida cerrada sin crear una nueva publicación.
-* `PUBLISHED`: pregunta que originó una publicación.
-
-Eliminar definitivamente una pregunta será una operación administrativa separada y futura.
-
----
-
-# 10. Conversión de pregunta en publicación
-
-Flujo:
-
-Estudiante envía pregunta.
-
-↓
-
-Pregunta queda pendiente.
-
-↓
-
-Profesor inicia sesión.
-
-↓
-
-Profesor consulta la pregunta.
-
-↓
-
-Profesor escribe la solución.
-
-↓
-
-Profesor asigna hashtags.
-
-↓
-
-Profesor decide publicarla.
-
-↓
-
-Se genera o vincula una publicación.
-
-↓
-
-La solución queda disponible públicamente.
-
-La pregunta original debe conservarse para mantener trazabilidad interna.
-
-Una pregunta de estudiante puede originar como máximo una publicación.
-
-Durante la preparación editorial, el profesor puede crear un borrador de publicación asociado a una pregunta pendiente. En ese estado:
-
-* la pregunta continúa en `PENDING`;
-* el borrador puede estar incompleto;
-* la pregunta no se considera publicada todavía;
-* archivar o rechazar la pregunta queda bloqueado mientras exista el borrador;
-* descartar el borrador elimina únicamente la publicación en borrador;
-* la pregunta y su imagen adjunta permanecen intactas.
-
-Implementado en la fase Admin Questions V2B2A:
-
-* el borrador asociado a una pregunta se edita manualmente;
-* guardar cambios es una acción explícita, sin autosave;
-* la sección editorial del Post puede cambiar sin modificar la sección original de la StudentQuestion;
-* publicar requiere título y contenido;
-* publicar actualiza atómicamente el Post y la StudentQuestion;
-* `StudentQuestion.PUBLISHED` significa que la pregunta originó una publicación;
-* la StudentQuestion continúa siendo privada y administrativa;
-* las preguntas publicadas aparecen en una pestaña administrativa propia;
-* el Post publicado queda visible en la API pública;
-* los Posts publicados quedan en solo lectura durante esta fase.
-
-Implementado en la fase Admin Publications V1:
-
-* el panel administrativo incluye un módulo de publicaciones;
-* las publicaciones se organizan en pestañas de borradores, publicadas y archivadas;
-* los Posts `DRAFT`, `PUBLISHED` y `ARCHIVED` pueden editarse con guardado manual;
-* los cambios guardados sobre un Post `PUBLISHED` se reflejan inmediatamente en la web pública;
-* los Posts `ARCHIVED` se conservan administrativamente y no son visibles públicamente;
-* archivar y restaurar publicaciones son acciones explícitas;
-* `publishedAt` conserva la fecha de primera publicación al archivar y restaurar;
-* `StudentQuestion.PUBLISHED` no cambia cuando se archiva o restaura el Post asociado.
-
-Implementado en la fase Admin Hashtags V1:
-
-* los hashtags son gestionados únicamente por el profesor;
-* el panel administrativo incluye `Admin > Hashtags`;
-* el profesor puede crear, renombrar y eliminar hashtags cuando no tienen usos;
-* el slug se genera automáticamente al crear un hashtag;
-* el slug permanece estable e inmutable al renombrar para conservar URLs públicas;
-* el listado administrativo muestra `usageCount`;
-* un Post puede tener múltiples hashtags;
-* la asignación de hashtags se realiza desde el editor de publicaciones;
-* guardar hashtags, contenido y sección ocurre en una única operación editorial;
-* los cambios guardados sobre un Post `PUBLISHED` se reflejan inmediatamente en la web pública.
-
-Implementado en la fase Admin Publications V2:
-
-* el profesor puede crear publicaciones `DRAFT` manualmente desde `Admin > Publicaciones`;
-* una publicación manual nace sin `StudentQuestion` de origen;
-* crear una publicación manual no la publica automáticamente;
-* el editor existente permite completar título, contenido, sección y hashtags;
-* descartar un borrador manual elimina únicamente ese Post y no afecta preguntas.
-
-Implementado en la fase Editor Académico EP1:
-
-* el profesor edita el contenido de publicaciones mediante un editor visual estructurado;
-* el contenido editorial se guarda como documento estructurado y no como HTML libre;
-* el sistema soporta párrafos, subtítulos, negrita, cursiva, subrayado, listas, citas, enlaces y saltos de línea;
-* el texto plano se mantiene derivado del documento para compatibilidad, validación y búsqueda futura;
-* el render público interpreta únicamente nodos y marcas permitidas, sin ejecutar HTML enviado por usuarios.
-
-Implementado en la fase Editor Académico EP2:
-
-* el editor ofrece una barra de herramientas más clara para contenido académico;
-* la barra de herramientas permanece visible al editar publicaciones largas;
-* se agregan tamaños, colores, alineación y resaltados mediante tokens controlados;
-* se agregan bloques académicos de nota, ejemplo e importante;
-* los enlaces se distinguen visualmente dentro del editor;
-* el backend continúa validando y normalizando el documento estructurado;
-* el render público traduce únicamente tokens conocidos a estilos seguros, sin HTML ni CSS libre.
-
-Implementado en la fase Editor Académico EP3B:
-
-* el profesor puede subir imágenes propias de una publicación e insertarlas exactamente en la posición del cursor;
-* el documento estructurado guarda únicamente `postImageId`, un `caption` opcional y un `displaySize` controlado (`small`, `medium`, `large`), nunca URLs ni `public_id`;
-* el texto alternativo pertenece a la metadata `PostImage` y se actualiza de forma independiente;
-* el pie de imagen y el tamaño visual pertenecen al uso editorial dentro de `content_document`;
-* el render público resuelve cada imagen contra la metadata del Post actual y no utiliza URLs provenientes del documento;
-* el backend valida que las imágenes referenciadas existan y pertenezcan a la publicación antes de guardar;
-* no hay redimensionamiento libre ni píxeles/porcentajes persistidos.
-
-Implementado en la fase Editor Académico EP3C:
-
-* las imágenes de Post no referenciadas pueden eliminarse explícitamente desde el panel administrativo;
-* las imágenes todavía referenciadas por `content_document` no pueden eliminarse;
-* descartar un `DRAFT` limpia primero Cloudinary, luego metadata `post_images` y finalmente el Post;
-* si Cloudinary responde `NOT_FOUND`, la limpieza se considera idempotente y puede continuar;
-* las `QuestionAttachment` permanecen separadas, privadas y no se modifican por este cleanup.
-
-Implementado en la fase Editor Académico EP4:
-
-* la barra sticky del editor se compacta para ocupar menos altura durante publicaciones largas;
-* la vista previa permite revisar el estado actual del editor antes de publicar o guardar;
-* la vista previa reutiliza el mismo `PostContentRenderer` público y por tanto conserva la whitelist segura;
-* la vista previa puede mostrar cambios `dirty` locales sin disparar guardado automático.
-
-Las imágenes adjuntas por estudiantes son referencias privadas de la pregunta. No se copian ni se reutilizan automáticamente en una publicación. Si posteriormente el profesor decide usar una imagen de una pregunta en una publicación, deberá crearse una copia independiente propiedad de la publicación.
-
-Futuro:
-
-* búsqueda avanzada o autocompletado de hashtags;
-* redirects si alguna vez se permite cambiar slugs;
-* copia controlada de una QuestionAttachment hacia una imagen de Post;
-* versionado o historial de cambios;
-* autosave.
-
----
-
-# 11. Panel administrativo
-
-El panel administrativo es privado.
-
-Debe requerir autenticación.
-
-Pantalla principal propuesta:
-
-## Resumen
-
-* preguntas pendientes;
-* publicaciones;
-* visitas;
-* actividad reciente.
-
-## Preguntas
-
-Listado de preguntas enviadas por estudiantes.
-
-Debe permitir:
-
-* consultar;
-* filtrar por estado;
-* abrir;
-* responder;
-* publicar;
-* rechazar.
-
-## Publicaciones
-
-Debe permitir:
-
-* crear;
-* editar;
-* eliminar;
-* publicar.
-
-## Hashtags
-
-Debe permitir:
-
-* consultar;
-* crear;
-* editar cuando sea seguro;
-* eliminar si no genera inconsistencias.
-
-## Enlaces de interés
-
-Debe permitir:
-
-* crear;
-* editar;
-* eliminar.
-
-## Estadísticas
-
-Panel privado de métricas.
-
----
-
-# 12. Enlaces de interés
-
-La sección pública mostrará recursos seleccionados por el profesor.
-
-Cada enlace puede contener:
-
-* título;
-* descripción;
-* URL;
-* fecha de creación;
-* estado activo/inactivo.
-
-Solo el profesor puede administrarlos.
-
----
-
-# 13. Contador público de visitas
-
-La parte pública mostrará únicamente una estadística:
-
-**Visitas al sitio: X**
-
-No se mostrarán públicamente estadísticas detalladas.
-
-Una recarga constante de la página no debería incrementar indefinidamente el contador.
-
-Se utilizará un concepto de sesión anónima para aproximar las visitas.
-
-Implementado en Analytics V1:
-
-* el contador público muestra únicamente visitas totales del sitio;
-* el identificador anónimo vive en `sessionStorage`, por lo que dura la sesión del navegador;
-* refrescar una página no incrementa indefinidamente el contador;
-* no se recolectan IP, ubicación, huella digital, correo, UID de Firebase, user agent ni referrer.
-
----
-
-# 14. Estadísticas privadas
-
-Solo el profesor podrá consultar las estadísticas detalladas.
-
-Como mínimo:
-
-* visitas totales;
-* visitas del día;
-* visitas de la semana;
-* visitas del mes;
-* secciones más consultadas;
-* taller más consultado;
-* parcial más consultado;
-* publicaciones más consultadas;
-* total de preguntas recibidas;
-* preguntas pendientes;
-* preguntas respondidas/publicadas.
-
-No recopilar información personal que no sea necesaria.
-
-Implementado en Analytics V1:
-
-* resumen privado en `Admin > Estadísticas`;
-* visitas totales, del día, de la semana y del mes;
-* días calendario calculados en `America/Bogota`;
-* visitas diarias de los últimos 30 días, incluyendo días sin visitas;
-* secciones, taller, parcial y publicaciones más consultadas;
-* conteo de preguntas totales, pendientes y publicadas.
-
----
-
-# 15. Navegación esperada
-
-## Consulta
-
-Inicio
-
-→ Talleres
-
-→ Taller 1
-
-→ Publicaciones
-
-→ Publicación
-
-## Hashtags
-
-Publicación
-
-→ `#Cuencas`
-
-→ Publicaciones relacionadas
-
-## Pregunta
-
-Inicio
-
-→ Agregar una pregunta
-
-→ Seleccionar categoría
-
-→ Nickname o Anónimo
-
-→ Escribir pregunta
-
-→ Adjuntar imagen opcional
-
-→ Enviar
-
-→ Confirmación
-
-## Administración
-
-Login
-
-→ Dashboard
-
-→ Preguntas pendientes
-
-→ Pregunta
-
-→ Responder
-
-→ Asignar hashtags
-
-→ Publicar
-
----
-
-# 16. Diseño
-
-La interfaz deberá tomar como inspiración las referencias visuales proporcionadas por el profesor.
-
-Características deseadas:
-
-* limpia;
-* académica;
-* sencilla;
-* moderna;
-* responsive;
-* fácil de utilizar;
-* sin sobrecarga visual.
-
-La página principal utilizará tarjetas o accesos visuales grandes para:
-
-* Enlaces de interés;
-* Talleres;
-* Parciales.
-
-La experiencia móvil debe considerarse desde el inicio.
-
----
-
-# 17. Seguridad y privacidad
-
-Los estudiantes no requieren cuenta.
-
-No solicitar información personal innecesaria.
-
-Las operaciones administrativas requieren autenticación.
-
-Las preguntas públicas nunca deben permitir ejecutar HTML o scripts introducidos por usuarios.
-
-Las imágenes deben validarse.
-
-El formulario público debe tener mecanismos para reducir spam y abuso.
-
----
-
-# 18. Fuera del alcance inicial
-
-No implementar inicialmente:
-
-* cuentas de estudiantes;
-* perfiles de estudiantes;
-* comentarios públicos;
-* chats;
-* mensajería privada;
-* calificaciones;
-* entrega de talleres;
-* sistema de notas;
-* múltiples profesores administradores;
-* aplicación móvil nativa;
-* microservicios.
-
-Estas funcionalidades requieren nueva aprobación antes de incorporarse.
-
----
-
-# 19. Objetivo del MVP
-
-El MVP será considerado funcional cuando un estudiante pueda:
-
-1. entrar a la página;
-2. navegar por Talleres y Parciales;
-3. consultar publicaciones;
-4. buscar contenido;
-5. navegar mediante hashtags;
-6. consultar Enlaces de interés;
-7. enviar una pregunta como nickname o Anónimo;
-8. adjuntar opcionalmente una imagen;
-9. ver el contador de visitas.
-
-Y cuando el profesor pueda:
-
-1. iniciar sesión;
-2. consultar preguntas pendientes;
-3. responderlas;
-4. convertirlas en publicaciones;
-5. crear publicaciones;
-6. editarlas y eliminarlas;
-7. crear y asignar hashtags;
-8. administrar enlaces;
-9. consultar estadísticas.
-
----
-
-# 20. Principio del producto
-
-La aplicación debe ser suficientemente sencilla para que el profesor pueda administrar su contenido sin conocimientos de programación.
-
-La tecnología debe permanecer invisible para el usuario final.
-
-El producto existe para facilitar la consulta y acumulación progresiva del conocimiento de la materia.
+- registro público de estudiantes;
+- creación de hashtags por estudiantes;
+- comentarios;
+- autosave;
+- versionado editorial;
+- búsqueda avanzada/autocomplete;
+- imágenes de publicaciones reutilizadas automáticamente desde preguntas.

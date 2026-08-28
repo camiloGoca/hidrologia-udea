@@ -19,7 +19,7 @@ import AdminLoginView from '@/views/admin/AdminLoginView.vue'
 import AdminAnalyticsView from '@/views/admin/AdminAnalyticsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
-import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
+import SectionPostsView from '@/views/sections/SectionPostsView.vue'
 import TalleresView from '@/views/sections/TalleresView.vue'
 import HashtagPostsView from '@/views/tags/HashtagPostsView.vue'
 
@@ -43,7 +43,7 @@ const router = createRouter({
         {
           path: 'talleres/:slug',
           name: 'workshop-detail',
-          component: SectionPlaceholderView,
+          component: SectionPostsView,
           props: { sectionKind: 'taller' },
         },
         {
@@ -54,7 +54,7 @@ const router = createRouter({
         {
           path: 'parciales/:slug',
           name: 'exam-detail',
-          component: SectionPlaceholderView,
+          component: SectionPostsView,
           props: { sectionKind: 'parcial' },
         },
         {

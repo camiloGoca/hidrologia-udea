@@ -1,106 +1,50 @@
-# ARCHITECTURE.md — Hidrología UdeA
+# Architecture — Hidrología UdeA
 
-## 1. Arquitectura general
+## 1. Vista general
 
-La aplicación utilizará una arquitectura:
-
-**SPA + REST API + PostgreSQL + servicios cloud administrados**
-
-El backend será un:
-
-**Monolito modular**
-
-No se utilizarán microservicios para el MVP.
-
----
-
-# 2. Diagrama general
+Hidrología UdeA usa una arquitectura simple:
 
 ```text
-                        USUARIO
-                           │
-                           ▼
-                ┌────────────────────┐
-                │ Firebase Hosting   │
-                │                    │
-                │ Vue 3 + TypeScript │
-                └─────────┬──────────┘
-                          │
-                     /api/v1
-                          │
-                          ▼
-                ┌────────────────────┐
-                │ Google Cloud Run   │
-                │                    │
-                │ Spring Boot 4.1.x  │
-                │ Java 17            │
-                └───┬────────┬───────┘
-                    │        │
-          ┌─────────┘        └─────────┐
-          ▼                            ▼
-┌──────────────────┐         ┌──────────────────┐
-│ PostgreSQL       │         │ Cloudinary       │
-│ Neon             │         │                  │
-│                  │         │ imágenes         │
-└──────────────────┘         └──────────────────┘
+Vue 3 SPA
+   ↓ /api/v1
+Spring Boot 4.1.x monolito modular
+   ↓
+PostgreSQL + Flyway
 
-            Firebase Authentication
-                      │
-                      ▼
-               Profesor/Admin
+Servicios externos:
+- Firebase Authentication / Firebase Admin SDK para el profesor.
+- Cloudinary para almacenamiento de imágenes.
 ```
 
----
+No se usan microservicios, colas, Redis, Elasticsearch ni Kubernetes para el MVP.
 
-# 3. Repositorio
-
-Se utilizará un monorepo.
-
-Estructura inicial:
+## 2. Repositorio
 
 ```text
-hidrologia-udea/
-│
-├── frontend/
-│
-├── backend/
-│
-├── docs/
-│   ├── PRODUCT_SPEC.md
-│   └── ARCHITECTURE.md
-│
-├── infra/
-│
-├── .github/
-│   └── workflows/
-│
-├── AGENTS.md
-├── README.md
-├── .gitignore
-└── .env.example
+frontend/   aplicación Vue
+backend/    API REST Spring Boot
+docs/       documentación funcional y técnica
+infra/      infraestructura local
 ```
 
----
+## 3. Frontend
 
-# 4. Frontend
+Stack:
 
-Tecnologías:
+- Vue 3;
+- TypeScript;
+- Vite;
+- Vue Router;
+- Pinia;
+- Axios;
+- Tailwind CSS;
+- Tiptap / ProseMirror;
+- Vitest.
 
-* Vue 3
-* TypeScript
-* Vite
-* Composition API
-* Vue Router
-* Pinia
-* Axios
-* Tailwind CSS
-* Tiptap / ProseMirror para edición estructurada de publicaciones
-
-Estructura orientativa:
+Organización principal:
 
 ```text
 frontend/src/
-
 assets/
 components/
 composables/
@@ -109,76 +53,82 @@ router/
 services/
 stores/
 types/
-views/
 utils/
+views/
 ```
 
-## Responsabilidades
+Reglas:
 
-Frontend:
+- las views consumen servicios, no Axios directamente;
+- `httpClient` usa `VITE_API_BASE_URL` con fallback `/api/v1`;
+- `adminHttpClient` obtiene el ID Token desde Firebase Auth y agrega `Authorization: Bearer` solo a requests admin;
+- solo variables `VITE_*` llegan al bundle;
+- no se persisten manualmente ID Tokens;
+- no se usa `v-html`.
 
-* interfaz;
-* navegación;
-* formularios;
-* validaciones de experiencia de usuario;
-* consumo de API;
-* manejo de sesión del administrador.
+## 4. Backend
 
-Frontend NO es la autoridad de seguridad.
+Stack:
 
-Toda operación sensible debe validarse nuevamente en el backend.
+- Java 17;
+- Spring Boot 4.1.x;
+- Maven;
+- Spring Web MVC;
+- Spring Security;
+- Spring Data JPA / Hibernate;
+- Bean Validation;
+- Flyway;
+- Actuator;
+- SpringDoc OpenAPI;
+- Firebase Admin SDK;
+- Cloudinary Java SDK.
 
----
-
-# 5. Backend
-
-Tecnologías:
-
-* Java 17
-* Spring Boot 4.1.x
-* Maven
-* Spring Web
-* Spring Security
-* Spring Data JPA
-* Hibernate
-* Bean Validation
-* Flyway
-* Spring Boot Actuator
-* OpenAPI / Swagger
-
-Arquitectura por funcionalidad.
-
-Ejemplo:
+El backend es un monolito modular por funcionalidad:
 
 ```text
-backend/src/main/java/.../
-
-auth/
 analytics/
-attachment/
+admin/
 link/
 post/
 question/
 section/
-tag/
 shared/
+tag/
 ```
 
-Cada módulo podrá contener:
+Controllers devuelven DTOs. Las entidades JPA no se exponen directamente por HTTP.
 
-```text
-controller/
-service/
-repository/
-entity/
-dto/
-```
+## 5. Base de datos
 
-según sea necesario.
+Base principal: PostgreSQL.
 
----
+Desarrollo local:
 
-# 6. API REST
+- Docker Compose;
+- imagen oficial PostgreSQL;
+- puerto host configurable con `POSTGRES_HOST_PORT`.
+
+Producción prevista:
+
+- Neon PostgreSQL.
+
+Flyway controla el esquema. Hibernate valida con `ddl-auto=validate`; no crea ni actualiza tablas.
+
+Migraciones actuales:
+
+- `V1__create_sections.sql`;
+- `V2__create_interesting_links.sql`;
+- `V3__create_posts_and_tags.sql`;
+- `V4__create_student_questions.sql`;
+- `V5__create_question_attachments.sql`;
+- `V6__link_posts_to_source_questions.sql`;
+- `V7__add_post_content_document.sql`;
+- `V8__create_post_images.sql`;
+- `V9__create_analytics.sql`.
+
+Las migraciones V1-V9 ya aplicadas son inmutables.
+
+## 6. API pública
 
 Prefijo:
 
@@ -186,670 +136,220 @@ Prefijo:
 /api/v1
 ```
 
-Ejemplos conceptuales:
+Rutas públicas principales:
 
 ```text
-GET    /api/v1/sections
-GET    /api/v1/posts
-GET    /api/v1/posts/{id}
-GET    /api/v1/tags
-GET    /api/v1/search
-
-POST   /api/v1/questions
-
-GET    /api/v1/admin/questions
-POST   /api/v1/admin/posts
-PUT    /api/v1/admin/posts/{id}
-DELETE /api/v1/admin/posts/{id}
-
-POST   /api/v1/admin/tags
-GET    /api/v1/admin/analytics/summary
+GET  /sections
+GET  /sections/{slug}/posts
+GET  /posts/{id}
+GET  /posts/search?q=...
+GET  /tags/{slug}/posts
+GET  /links
+POST /questions
+POST /analytics/visit
+POST /analytics/sections/{slug}/view
+POST /analytics/posts/{id}/view
+GET  /analytics/visits/count
 ```
 
-Las rutas exactas se definirán durante la implementación.
+Las rutas públicas de publicaciones solo exponen contenido `PUBLISHED`.
 
----
+## 7. API administrativa
 
-# 7. PostgreSQL
+Todas las rutas administrativas viven bajo:
 
-Base de datos relacional principal: PostgreSQL 17.
+```text
+/api/v1/admin/**
+```
 
-## Desarrollo
+Requieren rol `ADMIN`.
 
-PostgreSQL 17 ejecutado localmente con Docker Compose mediante la imagen oficial `postgres:17.10-alpine`.
+Rutas principales:
 
-## Producción
+```text
+GET    /admin/me
+GET    /admin/questions
+GET    /admin/questions/pending
+GET    /admin/questions/{id}
+POST   /admin/questions/{id}/draft
+DELETE /admin/questions/{id}/draft
+POST   /admin/questions/{id}/reject
+POST   /admin/questions/{id}/archive
+POST   /admin/questions/{id}/reopen
 
-PostgreSQL administrado mediante Neon.
+GET    /admin/posts
+POST   /admin/posts
+GET    /admin/posts/{id}
+PATCH  /admin/posts/{id}
+DELETE /admin/posts/{id}
+POST   /admin/posts/{id}/publish
+POST   /admin/posts/{id}/archive
+POST   /admin/posts/{id}/restore
+POST   /admin/posts/{postId}/images
+PATCH  /admin/posts/{postId}/images/{imageId}
+DELETE /admin/posts/{postId}/images/{imageId}
 
-La aplicación debe utilizar configuración intercambiable mediante variables de entorno.
+GET    /admin/tags
+POST   /admin/tags
+PATCH  /admin/tags/{id}
+DELETE /admin/tags/{id}
 
-Ejemplo conceptual:
+GET    /admin/links
+POST   /admin/links
+PATCH  /admin/links/{id}
+DELETE /admin/links/{id}
+
+GET    /admin/analytics/summary
+```
+
+## 8. Seguridad
+
+Spring Security mantiene:
+
+- API stateless;
+- rutas públicas explícitas;
+- `/api/v1/admin/**` con rol `ADMIN`;
+- `anyRequest().denyAll()`.
+
+Firebase:
+
+- frontend usa Firebase Web SDK solo para login;
+- backend usa Firebase Admin SDK para verificar ID Tokens;
+- `verifyIdToken(token, true)` valida revocación;
+- el UID se compara contra `FIREBASE_ADMIN_UID`;
+- email no se usa como autoridad.
+
+Con `FIREBASE_ENABLED=false`, tests y entornos locales sin credenciales siguen funcionando.
+
+## 9. Contenido académico estructurado
+
+`posts.content_document` es JSONB y es la fuente editorial de verdad.
+
+`posts.content` es texto plano derivado para búsquedas y compatibilidad.
+
+La entidad JPA persiste el JSON como tipo Java neutral para evitar acoplarla a una versión concreta de Jackson. La validación/canonicalización del documento usa componentes de contenido del backend.
+
+El documento permite únicamente nodos, marcas y atributos whitelisted:
+
+- párrafos;
+- H2/H3;
+- listas;
+- citas;
+- bloques académicos;
+- enlaces HTTP/HTTPS/mailto seguros;
+- estilos semánticos controlados;
+- imágenes por `postImageId`, caption y `displaySize`.
+
+Se rechazan HTML libre, estilos CSS arbitrarios, clases arbitrarias y atributos no permitidos.
+
+## 10. Imágenes
+
+Cloudinary almacena binarios; PostgreSQL guarda metadata.
+
+Preguntas:
+
+- `QuestionAttachment`;
+- máximo una imagen;
+- JPEG/PNG;
+- privada para admin;
+- no se vuelve pública automáticamente.
+
+Publicaciones:
+
+- `PostImage`;
+- pertenece a un Post;
+- folder Cloudinary independiente;
+- formato canónico `jpg` o `png`;
+- `public_id` no se expone en DTOs;
+- el documento público referencia imágenes por metadata controlada;
+- una imagen referenciada no puede eliminarse;
+- una imagen no utilizada sí puede eliminarse;
+- al descartar un borrador con imágenes se limpia Cloudinary antes de metadata y Post;
+- `NOT_FOUND` remoto se trata como idempotente.
+
+## 11. Hashtags
+
+`tags` y `post_tags` existen desde V3.
+
+Reglas técnicas:
+
+- slug generado automáticamente al crear;
+- slug inmutable al renombrar;
+- unicidad por slug;
+- unicidad case-insensitive por nombre;
+- sin `CascadeType.REMOVE` ni `CascadeType.ALL` destructivo entre Post y Tag;
+- `usageCount` se calcula con query agregada para evitar N+1.
+
+## 12. Analytics
+
+Analytics V1 usa tablas propias:
+
+- `site_visits`;
+- `section_views`;
+- `post_views`.
+
+El frontend genera un UUID anónimo por sesión de navegador mediante `sessionStorage`. No se usan cookies ni localStorage para analytics.
+
+El backend evita duplicados por sesión:
+
+- una visita por `session_id`;
+- una consulta de sección por `session_id + section_id`;
+- una consulta de publicación por `session_id + post_id`.
+
+No se guardan IP, ubicación, fingerprint, correo, Firebase UID, user agent ni referrer.
+
+## 13. Configuración
+
+Variables principales:
 
 ```text
 DB_URL
 DB_USERNAME
 DB_PASSWORD
+CLOUDINARY_ENABLED
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+FIREBASE_ENABLED
+FIREBASE_PROJECT_ID
+FIREBASE_ADMIN_UID
+GOOGLE_APPLICATION_CREDENTIALS
+VITE_API_BASE_URL
+VITE_FIREBASE_*
 ```
 
----
+`.env.example` contiene placeholders. `.env` está ignorado.
 
-# 8. Migraciones
+`GOOGLE_APPLICATION_CREDENTIALS` lo descubre Google Application Default Credentials; la aplicación no abre ni parsea manualmente el JSON de service account.
 
-Flyway será responsable del esquema.
-
-Ejemplo:
-
-```text
-backend/src/main/resources/db/migration/
-
-V1__initial_schema.sql
-V2__add_tags.sql
-V9__create_analytics.sql
-```
-
-Nunca modificar una migración que ya haya sido ejecutada en producción.
-
-Crear una nueva migración.
-
----
-
-# 9. Modelo conceptual
-
-## Section
-
-Representa:
-
-* Taller 1
-* Taller 2
-* Taller 3
-* Parcial 1
-* Parcial 2
-* Parcial 3
-
-Campos aproximados:
-
-```text
-id
-type
-name
-slug
-description
-display_order
-active
-```
-
----
-
-## StudentQuestion
-
-```text
-id
-nickname
-anonymous
-content
-status
-section_id
-created_at
-updated_at
-```
-
----
-
-## Post
-
-```text
-id
-title
-content
-content_document
-section_id
-source_question_id
-status
-created_at
-updated_at
-published_at
-```
-
-`content_document` es un `JSONB` con el documento estructurado del editor académico y es la fuente editorial de verdad. `content` permanece como texto plano derivado para compatibilidad, validación y búsqueda futura.
-
-`source_question_id` es nullable: una publicación puede originarse en una pregunta de estudiante o ser creada directamente por el profesor en una fase futura.
-
-Cuando existe, la relación es conceptualmente:
-
-```text
-StudentQuestion 1 -> 0..1 Post
-```
-
-La base de datos debe proteger esta regla con una restricción única sobre `posts.source_question_id`.
-
-El vínculo usa `ON DELETE RESTRICT` para evitar perder trazabilidad editorial si una pregunta ya originó una publicación o borrador. La eliminación definitiva de preguntas deberá resolver explícitamente esta relación en una fase futura.
-
-Los posts en estado `DRAFT` pueden tener título y contenido incompletos. Los posts públicos o archivados deben conservar título y contenido válidos.
-
----
-
-## Tag
-
-```text
-id
-name
-slug
-created_at
-```
-
----
-
-## PostTag
-
-Tabla many-to-many:
-
-```text
-post_id
-tag_id
-```
-
----
-
-## Attachment
-
-```text
-id
-cloudinary_public_id
-url
-resource_type
-question_id
-post_id
-created_at
-```
-
-La implementación puede utilizar asociaciones alternativas si mejoran la integridad del modelo.
-
----
-
-## InterestingLink
-
-```text
-id
-title
-description
-url
-active
-created_at
-updated_at
-```
-
----
-
-## SiteVisit
-
-```text
-id
-session_id
-visited_at
-```
-
-## SectionView
-
-```text
-id
-session_id
-section_id
-viewed_at
-```
-
-## PostView
-
-```text
-id
-session_id
-post_id
-viewed_at
-```
-
----
-
-## AdminUser
-
-Como mínimo deberá existir una forma segura de asociar:
-
-```text
-firebase_uid
-role
-active
-```
-
-El diseño final podrá variar.
-
----
-
-# 10. Relaciones principales
-
-```text
-Section
-  │
-  ├── StudentQuestion
-  │
-  └── Post
-
-StudentQuestion
-  │
-  └── Post opcional
-
-Post
-  │
-  ├── Attachment
-  │
-  └── Tag
-       many-to-many
-
-InterestingLink
-  independiente
-
-site_visits, section_views y post_views
-  registran métricas anónimas e idempotentes por sesión
-```
-
-Mientras el Post asociado esté en `DRAFT`, la StudentQuestion permanece en `PENDING`. Ese borrador bloquea archivar o rechazar la pregunta hasta que sea descartado. Descartar un borrador elimina solo el Post; no elimina la pregunta ni su attachment.
-
-En Admin Questions V2B2A el borrador se edita con guardado manual. La sección del Post puede cambiar de forma independiente a la sección original de la StudentQuestion. La publicación exige título y contenido no vacíos y se realiza en una única transacción: `Post.DRAFT -> Post.PUBLISHED`, `published_at = now` y, si existe pregunta origen, `StudentQuestion.PENDING -> StudentQuestion.PUBLISHED`. La pregunta publicada sigue siendo un recurso privado/admin; el contenido público es el Post publicado.
-
-En Admin Publications V1 el panel administrativo lista Posts por estado (`DRAFT`, `PUBLISHED`, `ARCHIVED`) con paginación y orden editorial por `updated_at DESC, id DESC`. Los tres estados permiten edición con guardado manual. Los Posts publicados requieren título y contenido válidos, y sus cambios guardados impactan inmediatamente la API pública. Los Posts archivados no aparecen en endpoints públicos, pero pueden editarse y restaurarse. Las transiciones `PUBLISHED -> ARCHIVED` y `ARCHIVED -> PUBLISHED` preservan `published_at` y no modifican la StudentQuestion de origen.
-
-En Admin Hashtags V1 los hashtags se gestionan únicamente desde el panel del profesor. El slug se genera al crear el Tag y queda inmutable al renombrar para conservar URLs públicas como `/hashtags/morfometria`. El listado administrativo calcula `usageCount` sobre todas las relaciones `post_tags`, incluyendo Posts `DRAFT`, `PUBLISHED` y `ARCHIVED`, porque ese conteo determina si el Tag puede eliminarse. El editor de Posts guarda `title`, `content`, `sectionSlug` y `tagIds` en una única operación transaccional. Editar tags actualiza `posts.updated_at`; en Posts publicados el cambio se refleja inmediatamente en la API pública, sin modificar `published_at` ni la StudentQuestion de origen.
-
-En Admin Publications V2 el profesor puede crear Posts `DRAFT` manualmente desde el panel administrativo. Estos Posts usan `source_question_id = null`, `published_at = null`, título y contenido inicialmente vacíos, sección activa obligatoria y hashtags vacíos. La publicación posterior reutiliza el flujo editorial existente. Descartar un borrador manual elimina únicamente el Post y no modifica Questions.
-
-En Editor Académico EP1 el editor administrativo envía `contentDocument`; el backend valida el documento con una whitelist de nodos y marcas permitidas, extrae `content` como texto plano derivado y guarda ambos campos en la misma operación transaccional. Los endpoints públicos exponen el documento estructurado para un renderer propio de Vue que no usa `v-html` ni ejecuta HTML libre.
-
-En Editor Académico EP2 el documento estructurado admite estilos semánticos controlados mediante tokens: tamaños (`small`, `normal`, `large`), colores (`default`, `institutional`, `blue`, `muted`, `danger`), alineación (`left`, `center`, `right`, `justify`), resaltados (`note`, `important`) y bloques académicos (`note`, `example`, `important`). La barra de herramientas del editor es sticky respecto al scroll principal para facilitar publicaciones largas, y los enlaces tienen presentación visual propia durante la edición sin cambiar su representación canónica. El backend rechaza atributos desconocidos, colores libres, tamaños libres, clases arbitrarias y estilos CSS enviados por el cliente. El renderer público mapea esos tokens a clases conocidas y continúa sin usar `v-html`.
-
-En Editor Académico EP3B las imágenes de publicaciones se representan en `content_document` mediante nodos `image` que contienen únicamente `postImageId`, un `caption` opcional y un `displaySize` controlado (`small`, `medium`, `large`). La URL segura, dimensiones y texto alternativo viven en `post_images`; el `public_id` permanece solo en backend. Al guardar un Post, el backend extrae todos los `postImageId`, valida por lote que existan y pertenezcan al Post actual, y rechaza referencias cruzadas. El renderer público recibe únicamente la metadata de imágenes efectivamente referenciadas por el documento y renderiza `<figure>`, `<img>` y `<figcaption>` sin usar HTML libre ni URLs provenientes del JSON editorial. El editor inserta imágenes en la selección/cursor capturado; el texto alternativo se actualiza sobre `PostImage`, mientras el caption y el tamaño visual pertenecen al nodo del documento. El redimensionamiento libre y la copia desde `QuestionAttachment` quedan fuera de esta fase.
-
-En Editor Académico EP3C las imágenes de Post que ya no están referenciadas por `content_document` pueden eliminarse explícitamente desde el panel administrativo. El endpoint conserva la protección de ownership y rechaza eliminar imágenes todavía referenciadas. Al descartar un `DRAFT`, el backend borra primero los assets de Cloudinary, acepta `NOT_FOUND` como respuesta idempotente, elimina después la metadata `post_images` y finalmente elimina el Post. Si Cloudinary falla, el Post y su metadata se conservan para permitir reintento. Las `QuestionAttachment` permanecen separadas, privadas y no se modifican por el cleanup de PostImages.
-
-En Editor Académico EP4 la toolbar sticky se compacta para reducir la altura ocupada mientras se editan publicaciones largas. La vista previa editorial se resuelve completamente en frontend con el estado actual del formulario, incluso si está `dirty`, y reutiliza `PostContentRenderer` con la misma metadata de `PostImage` disponible en el editor. Abrir la preview no guarda, no publica, no cambia estado y no modifica `content_document`.
-
-En Admin Links V1 el profesor gestiona `interesting_links` desde `/admin/enlaces` mediante endpoints bajo `/api/v1/admin/links`. El modelo reutiliza el esquema de V2: `title`, `description`, `url`, `display_order` y `active`, sin nuevas migraciones. El endpoint público `/api/v1/links` sigue exponiendo únicamente enlaces activos ordenados por `display_order, id`.
-
-En Analytics V1 el frontend público crea un UUID anónimo por sesión de navegador usando `sessionStorage`. El backend registra una sola visita por `session_id`, una sola consulta por `session_id + section_id` y una sola consulta por `session_id + post_id`. No se guardan IP, ubicación, huella digital, correo, Firebase UID, user agent ni referrer. Las métricas privadas se consultan desde `/api/v1/admin/analytics/summary` y calculan día, semana y mes calendario en `America/Bogota`.
-
-Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
-
----
-
-# 11. Autenticación
-
-Proveedor:
-
-Firebase Authentication.
-
-Método inicial:
-
-Email + contraseña.
-
-Solo el profesor utiliza login.
-
-Flujo conceptual:
-
-```text
-Profesor
-   │
-   ▼
-Vue Login
-   │
-   ▼
-Firebase Authentication
-   │
-   ▼
-ID Token
-   │
-   ▼
-Spring Security
-   │
-   ▼
-Validación
-   │
-   ▼
-Autorización ADMIN
-```
-
-El backend nunca confiará únicamente en que Firebase haya autenticado al usuario.
-
-Debe verificar que corresponda al administrador autorizado.
-
----
-
-# 12. Imágenes
-
-Proveedor:
-
-Cloudinary.
-
-Uso:
-
-* capturas adjuntas por estudiantes;
-* imágenes utilizadas en soluciones/publicaciones.
-
-El backend controla las reglas de subida.
-
-Validar:
-
-* tamaño máximo;
-* tipos MIME permitidos;
-* errores de carga.
-
-PostgreSQL guarda referencias, no el archivo binario.
-
-Las imágenes adjuntas a preguntas permanecen privadas del flujo administrativo. No se copian automáticamente a Posts. Si una publicación futura reutiliza una imagen de pregunta, deberá hacerlo mediante una copia independiente propiedad del Post.
-
-Las imágenes propias de Posts se almacenan como metadata en `post_images` y se referencian desde el documento estructurado por `postImageId`. El documento puede guardar `displaySize` como token controlado, pero no almacena URLs, `public_id`, estilos arbitrarios, clases CSS, píxeles, porcentajes ni binarios. El render público solo expone la metadata mínima necesaria de imágenes referenciadas por el Post publicado. Las imágenes no referenciadas pueden eliminarse explícitamente desde Admin; al descartar un `DRAFT`, Cloudinary se limpia antes que la metadata y el Post.
-
----
-
-# 13. Estadísticas
-
-Las estadísticas principales serán propias del sistema.
-
-Modelo implementado en Analytics V1:
-
-```text
-site_visits
-section_views
-post_views
-```
-
-La búsqueda, los enlaces, las rutas administrativas y las preguntas enviadas no incrementan contadores de consulta de recursos en esta fase.
-
----
-
-# 14. Sesiones anónimas para visitas
-
-Para evitar que cada refresh cuente como una visita:
-
-Frontend crea o conserva un identificador de sesión anónimo.
-
-Ejemplo conceptual:
-
-```text
-sessionStorage
-session_id = UUID
-```
-
-El backend impone idempotencia con restricciones únicas: refrescar la página durante la misma sesión no incrementa indefinidamente las visitas ni las consultas del mismo recurso.
-
-No utilizar fingerprinting invasivo.
-
-No recolectar datos personales innecesarios.
-
----
-
-# 15. Búsqueda
-
-Primera implementación:
-
-PostgreSQL.
-
-Campos considerados:
-
-* título;
-* contenido;
-* hashtags.
-
-No agregar motores externos de búsqueda inicialmente.
-
-Si el volumen de datos crece extraordinariamente en el futuro, la arquitectura podrá revisarse.
-
----
-
-# 16. Hosting
-
-## Frontend
-
-Firebase Hosting.
-
-Contendrá el build generado por Vue/Vite.
-
-## Backend
-
-Google Cloud Run.
-
-Spring Boot será desplegado como aplicación contenerizada.
-
-Firebase Hosting podrá redirigir las solicitudes de API hacia Cloud Run si se decide utilizar una ruta compartida.
-
----
-
-# 17. Docker
-
-Docker se utilizará para:
-
-* PostgreSQL local;
-* reproducibilidad del entorno;
-* backend cuando sea necesario para despliegue.
-
-Durante desarrollo se utilizará:
-
-```text
-docker compose
-```
-
-para servicios auxiliares.
-
-El desarrollador podrá ejecutar Vue y Spring Boot directamente desde su máquina para facilitar debugging.
-
----
-
-# 18. Configuración por ambientes
-
-Ambientes iniciales:
-
-```text
-local
-test
-production
-```
+## 14. Testing
 
 Backend:
 
-```text
-application.yml
-application-local.yml
-application-test.yml
-application-prod.yml
-```
+- JUnit;
+- Mockito;
+- Spring MVC tests;
+- pruebas JPA con H2 cuando cruzan persistencia;
+- sin dependencia obligatoria de PostgreSQL Docker para la suite normal.
 
 Frontend:
 
-```text
-.env.development
-.env.production
-```
+- Vitest;
+- Vue Test Utils;
+- mocks de servicios API/Firebase;
+- tests sin backend real.
 
-Los secretos reales nunca estarán versionados.
+## 15. Gaps preproducción
 
----
+Riesgo principal pendiente:
 
-# 19. Testing
+- `POST /api/v1/questions` es público y acepta imagen opcional. Antes de producción conviene agregar protección anti-abuso: rate limiting, límites por sesión/origen, monitoreo y eventualmente CAPTCHA o mecanismo equivalente si el profesor lo aprueba.
 
-## Backend
+Pendiente de infraestructura:
 
-JUnit.
-
-Mockito cuando corresponda.
-
-Testcontainers para pruebas de integración donde resulte útil verificar comportamiento real con PostgreSQL.
-
-## Frontend
-
-Vitest.
-
-## End-to-end
-
-Playwright para flujos críticos.
-
-Flujos E2E prioritarios:
-
-* navegación pública;
-* búsqueda;
-* envío de pregunta;
-* login administrador;
-* publicación de respuesta.
-
----
-
-# 20. CI/CD
-
-Proveedor:
-
-GitHub Actions.
-
-Pipeline futuro:
-
-```text
-PUSH / PULL REQUEST
-        │
-        ├── Frontend
-        │     ├── install
-        │     ├── lint
-        │     ├── test
-        │     └── build
-        │
-        └── Backend
-              ├── compile
-              ├── test
-              └── package
-```
-
-Para `main`, posteriormente:
-
-```text
-Frontend
-   ↓
-Firebase Hosting
-
-Backend
-   ↓
-Cloud Run
-```
-
-La automatización de despliegues se implementará después de que el proyecto pueda desplegarse manualmente de forma confiable.
-
----
-
-# 21. Seguridad
-
-Principios:
-
-* mínimo privilegio;
-* backend como autoridad;
-* validación de toda entrada;
-* secretos mediante variables de entorno;
-* autenticación para administración;
-* rate limiting para formularios públicos;
-* archivos validados;
-* respuestas HTTP seguras;
-* manejo centralizado de errores.
-
-No almacenar información sensible innecesaria.
-
----
-
-# 22. Observabilidad
-
-Spring Boot Actuator proporcionará health checks básicos.
-
-Inicialmente no se requiere una plataforma avanzada de observabilidad.
-
-Logs:
-
-* útiles;
-* estructurados cuando sea práctico;
-* nunca incluir contraseñas, tokens ni secretos.
-
----
-
-# 23. Principios de arquitectura
-
-## Simplicidad
-
-No agregar infraestructura hasta necesitarla.
-
-## Separación de responsabilidades
-
-Frontend, backend, almacenamiento y base de datos tienen responsabilidades diferentes.
-
-## Seguridad
-
-Nunca confiar exclusivamente en el cliente.
-
-## Evolución incremental
-
-Primero hacer funcionar el flujo básico.
-
-Después incorporar servicios externos.
-
-## Comprensión
-
-Toda tecnología nueva debe introducirse acompañada de explicación y pasos claros para el desarrollador.
-
----
-
-# 24. Stack congelado para MVP
-
-```text
-Frontend
-Vue 3
-TypeScript
-Vite
-Vue Router
-Pinia
-Axios
-Tailwind CSS
-Tiptap / ProseMirror
-
-Backend
-Java 17
-Spring Boot 4.1.x
-Maven
-Spring Web
-Spring Security
-Spring Data JPA
-Hibernate
-Bean Validation
-Flyway
-Actuator
-OpenAPI
-
-Database
-PostgreSQL 17
-Neon en producción
-
-Authentication
-Firebase Authentication
-
-Image Storage
-Cloudinary
-
-Frontend Hosting
-Firebase Hosting
-
-Backend Hosting
-Google Cloud Run
-
-Infrastructure
-Docker
-
-Repository
-GitHub
-
-CI/CD
-GitHub Actions
-
-Testing
-JUnit
-Mockito
-Testcontainers
-Vitest
-Playwright
-```
+- configuración final de Firebase Hosting;
+- Cloud Run;
+- Neon;
+- secretos cloud;
+- CI/CD;
+- monitoreo y backups.

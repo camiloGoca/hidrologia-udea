@@ -64,7 +64,7 @@ describe('AdminLoginView', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('No fue posible iniciar sesión. Verifica tus credenciales.')
+    expect(wrapper.text()).toContain('No fue posible iniciar sesión. Verifica el correo y la contraseña.')
     expect(wrapper.text()).not.toContain('Crear cuenta')
     expect(wrapper.text()).not.toContain('Olvidé mi contraseña')
     expect(mockedSignOut).toHaveBeenCalled()
@@ -88,6 +88,19 @@ describe('AdminLoginView', () => {
 
     const wrapper = mountView()
 
-    expect(wrapper.text()).toContain('no está autorizada como administrador')
+    expect(wrapper.text()).toContain('no está autorizada para administrar el portal')
+    expect(wrapper.text()).not.toContain('Firebase')
+  })
+
+  it('can reveal and hide the password without changing auth behavior', async () => {
+    const wrapper = mountView()
+
+    expect(wrapper.get('input#admin-password').attributes('type')).toBe('password')
+
+    await wrapper.get('button[aria-pressed="false"]').trigger('click')
+    expect(wrapper.get('input#admin-password').attributes('type')).toBe('text')
+
+    await wrapper.get('button[aria-pressed="true"]').trigger('click')
+    expect(wrapper.get('input#admin-password').attributes('type')).toBe('password')
   })
 })

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordSectionView } from '@/services/api/analyticsService'
 import { getPostsBySection } from '@/services/api/postService'
 import type { SectionPostsResponse } from '@/types/post'
-import SectionPlaceholderView from '@/views/sections/SectionPlaceholderView.vue'
+import SectionPostsView from '@/views/sections/SectionPostsView.vue'
 
 const routeState = vi.hoisted(() => ({
   params: {
@@ -60,7 +60,7 @@ describe('section posts view', () => {
   it('shows loading while posts are requested', () => {
     mockedGetPostsBySection.mockReturnValue(new Promise(() => undefined))
 
-    const wrapper = mount(SectionPlaceholderView, {
+    const wrapper = mount(SectionPostsView, {
       props: { sectionKind: 'taller' },
       global: { stubs: { RouterLink: routerLinkStub } },
     })
@@ -71,7 +71,7 @@ describe('section posts view', () => {
   it('shows an empty state when a section has no posts', async () => {
     mockedGetPostsBySection.mockResolvedValue(emptyResponse)
 
-    const wrapper = mount(SectionPlaceholderView, {
+    const wrapper = mount(SectionPostsView, {
       props: { sectionKind: 'taller' },
       global: { stubs: { RouterLink: routerLinkStub } },
     })
@@ -96,7 +96,7 @@ describe('section posts view', () => {
       ],
     })
 
-    const wrapper = mount(SectionPlaceholderView, {
+    const wrapper = mount(SectionPostsView, {
       props: { sectionKind: 'taller' },
       global: { stubs: { RouterLink: routerLinkStub } },
     })
@@ -111,7 +111,7 @@ describe('section posts view', () => {
   it('shows a friendly error when posts fail', async () => {
     mockedGetPostsBySection.mockRejectedValue(new Error('Network error'))
 
-    const wrapper = mount(SectionPlaceholderView, {
+    const wrapper = mount(SectionPostsView, {
       props: { sectionKind: 'taller' },
       global: { stubs: { RouterLink: routerLinkStub } },
     })
@@ -147,7 +147,7 @@ describe('section posts view', () => {
       ],
     })
 
-    const wrapper = mount(SectionPlaceholderView, {
+    const wrapper = mount(SectionPostsView, {
       props: { sectionKind: 'taller' },
       global: { stubs: { RouterLink: routerLinkStub } },
     })

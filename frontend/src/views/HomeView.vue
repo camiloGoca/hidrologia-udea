@@ -93,8 +93,8 @@ const featureCards = [
           <p class="text-sm font-black uppercase text-sky-800">Participación estudiantil</p>
           <h2 class="mt-3 text-4xl font-black text-slate-950">¿No encontraste tu duda?</h2>
           <p class="mt-4 max-w-2xl leading-7 text-slate-700">
-            Esta sección permitirá enviar una pregunta al profesor cuando implementemos el módulo
-            correspondiente.
+            Envía tu pregunta al profesor. Quedará pendiente de revisión y podrá convertirse en
+            una publicación útil para el curso.
           </p>
           <RouterLink
             :to="{ name: 'new-question' }"
