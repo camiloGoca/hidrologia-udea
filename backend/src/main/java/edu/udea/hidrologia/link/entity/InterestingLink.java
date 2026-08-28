@@ -91,4 +91,19 @@ public class InterestingLink {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void update(
+            String title,
+            String description,
+            String url,
+            Integer displayOrder,
+            boolean active,
+            Instant updatedAt) {
+        this.title = title;
+        this.description = description;
+        this.url = url;
+        this.displayOrder = displayOrder;
+        this.active = active;
+        this.updatedAt = updatedAt;
+    }
 }

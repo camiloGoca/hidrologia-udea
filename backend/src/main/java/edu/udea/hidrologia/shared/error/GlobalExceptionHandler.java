@@ -22,6 +22,7 @@ import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
 import edu.udea.hidrologia.question.service.QuestionDraftConflictException;
 import edu.udea.hidrologia.question.service.UnsupportedQuestionStatusFilterException;
+import edu.udea.hidrologia.link.service.InvalidInterestingLinkRequestException;
 import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
@@ -105,6 +106,7 @@ public class GlobalExceptionHandler {
             MissingServletRequestPartException.class,
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
+            InvalidInterestingLinkRequestException.class,
             InvalidTagRequestException.class,
             InvalidPostContentDocumentException.class
     })

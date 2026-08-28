@@ -43,6 +43,7 @@ describe('AdminLayout', () => {
     expect(wrapper.text()).toContain('Preguntas')
     expect(wrapper.text()).toContain('Publicaciones')
     expect(wrapper.text()).toContain('Hashtags')
+    expect(wrapper.text()).toContain('Enlaces')
     expect(wrapper.text()).toContain('Cerrar sesión')
   })
 

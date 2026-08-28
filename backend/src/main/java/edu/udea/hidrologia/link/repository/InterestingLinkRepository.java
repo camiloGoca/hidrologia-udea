@@ -8,5 +8,7 @@ import edu.udea.hidrologia.link.entity.InterestingLink;
 
 public interface InterestingLinkRepository extends JpaRepository<InterestingLink, Long> {
 
+    List<InterestingLink> findAllByOrderByDisplayOrderAscIdAsc();
+
     List<InterestingLink> findByActiveTrueOrderByDisplayOrderAscIdAsc();
 }

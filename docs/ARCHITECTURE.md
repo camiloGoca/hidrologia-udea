@@ -455,6 +455,8 @@ En Editor Académico EP3C las imágenes de Post que ya no están referenciadas p
 
 En Editor Académico EP4 la toolbar sticky se compacta para reducir la altura ocupada mientras se editan publicaciones largas. La vista previa editorial se resuelve completamente en frontend con el estado actual del formulario, incluso si está `dirty`, y reutiliza `PostContentRenderer` con la misma metadata de `PostImage` disponible en el editor. Abrir la preview no guarda, no publica, no cambia estado y no modifica `content_document`.
 
+En Admin Links V1 el profesor gestiona `interesting_links` desde `/admin/enlaces` mediante endpoints bajo `/api/v1/admin/links`. El modelo reutiliza el esquema de V2: `title`, `description`, `url`, `display_order` y `active`, sin nuevas migraciones. El endpoint público `/api/v1/links` sigue exponiendo únicamente enlaces activos ordenados por `display_order, id`.
+
 Quedan para fases futuras: búsqueda avanzada/autocomplete de hashtags, redirects si alguna vez se permite cambiar slugs, copia explícita de QuestionAttachment hacia Post, versionado/historial y autosave.
 
 ---

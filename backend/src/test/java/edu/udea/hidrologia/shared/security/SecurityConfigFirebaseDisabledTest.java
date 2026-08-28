@@ -10,6 +10,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import edu.udea.hidrologia.link.service.AdminInterestingLinkService;
 import edu.udea.hidrologia.link.service.InterestingLinkService;
 import edu.udea.hidrologia.post.service.AdminPostImageService;
 import edu.udea.hidrologia.post.service.AdminPostPublicationService;
@@ -36,6 +37,9 @@ class SecurityConfigFirebaseDisabledTest {
 
     @MockitoBean
     private InterestingLinkService interestingLinkService;
+
+    @MockitoBean
+    private AdminInterestingLinkService adminInterestingLinkService;
 
     @MockitoBean
     private PostQueryService postQueryService;

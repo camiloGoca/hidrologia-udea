@@ -26,6 +26,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import edu.udea.hidrologia.link.service.InterestingLinkService;
+import edu.udea.hidrologia.link.service.AdminInterestingLinkService;
+import edu.udea.hidrologia.link.dto.AdminInterestingLinkResponse;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
@@ -66,6 +68,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private InterestingLinkService interestingLinkService;
+
+    @MockitoBean
+    private AdminInterestingLinkService adminInterestingLinkService;
 
     @MockitoBean
     private PostQueryService postQueryService;
@@ -828,6 +833,103 @@ class SecurityConfigTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(delete("/api/v1/admin/tags/1")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void protectsAdminLinkEndpointsWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/links"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/admin/links")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/v1/admin/links/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/v1/admin/links/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsForbiddenForNonAdminUidOnAdminLinkEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("other-user-token")))
+                .thenReturn(new VerifiedFirebaseToken("other-uid"));
+
+        mockMvc.perform(get("/api/v1/admin/links")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/admin/links")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/v1/admin/links/1")
+                .header("Authorization", "Bearer other-user-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/admin/links/1")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAdminUidOnAdminLinkEndpoints() throws Exception {
+        when(firebaseTokenVerifier.verify(eq("admin-token")))
+                .thenReturn(new VerifiedFirebaseToken("admin-uid"));
+        when(adminInterestingLinkService.create(any()))
+                .thenReturn(new AdminInterestingLinkResponse(
+                        1L,
+                        "IDEAM",
+                        null,
+                        "https://example.edu",
+                        0,
+                        true));
+        when(adminInterestingLinkService.update(eq(1L), any()))
+                .thenReturn(new AdminInterestingLinkResponse(
+                        1L,
+                        "IDEAM actualizado",
+                        null,
+                        "https://example.edu/nuevo",
+                        1,
+                        false));
+
+        mockMvc.perform(get("/api/v1/admin/links")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/admin/links")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "title": "IDEAM",
+                          "url": "https://example.edu"
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(patch("/api/v1/admin/links/1")
+                .header("Authorization", "Bearer admin-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "title": "IDEAM actualizado",
+                          "url": "https://example.edu/nuevo"
+                        }
+                        """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/links/1")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isNoContent());
     }
