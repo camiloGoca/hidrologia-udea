@@ -138,11 +138,11 @@ const router = createRouter({
     },
     {
       path: '/:pathMatch(.*)*',
-      name: 'not-found',
       component: PublicLayout,
       children: [
         {
           path: '',
+          name: 'not-found',
           component: NotFoundView,
         },
       ],

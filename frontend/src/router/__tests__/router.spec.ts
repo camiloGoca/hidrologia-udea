@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import PublicLayout from '@/layouts/PublicLayout.vue'
 import router from '@/router'
+import NotFoundView from '@/views/static/NotFoundView.vue'
 
 describe('router', () => {
   it('registers the main public routes', () => {
@@ -56,6 +58,23 @@ describe('router', () => {
     expect(
       routes.some((route) => route.path === '/:pathMatch(.*)*' && route.name === 'not-found'),
     ).toBe(true)
+  })
+
+  it('resolves unknown public URLs to NotFoundView inside PublicLayout', () => {
+    const route = router.resolve('/una-ruta-que-no-existe')
+
+    expect(route.name).toBe('not-found')
+    expect(route.matched).toHaveLength(2)
+    expect(route.matched[0]?.components?.default).toBe(PublicLayout)
+    expect(route.matched[1]?.components?.default).toBe(NotFoundView)
+  })
+
+  it('keeps existing public routes resolving normally', () => {
+    expect(router.resolve('/').name).toBe('home')
+    expect(router.resolve('/talleres').name).toBe('workshops')
+    expect(router.resolve('/parciales').name).toBe('exams')
+    expect(router.resolve('/enlaces').name).toBe('links')
+    expect(router.resolve('/preguntas/nueva').name).toBe('new-question')
   })
 
   it('protects administrative routes with the admin guard', () => {
