@@ -108,6 +108,8 @@ npm run dev
 
 Vite sirve la aplicación normalmente en `http://localhost:5173`. En desarrollo, el proxy de Vite envía `/api` hacia Spring Boot en `http://localhost:8080`.
 
+En producción, Firebase Hosting sirve la SPA estática y `VITE_API_BASE_URL` debe apuntar al backend desplegado en Northflank. Como el navegador llama a un origen distinto, el backend solo acepta CORS desde los origins configurados explícitamente en `CORS_ALLOWED_ORIGINS`; no se usa wildcard.
+
 ## Validaciones
 
 Backend:
@@ -132,6 +134,7 @@ npm run build
 - `.env` está ignorado por Git.
 - `.env.example` solo contiene placeholders.
 - El JSON de service account de Firebase debe vivir fuera del repositorio.
+- `CORS_ALLOWED_ORIGINS` define los origins del frontend autorizados para llamar al backend desde navegador. Para Firebase Hosting deben incluirse los dominios públicos de la SPA separados por coma.
 - `CLOUDINARY_API_SECRET`, `FIREBASE_ADMIN_UID`, `GOOGLE_APPLICATION_CREDENTIALS`, `TURNSTILE_SECRET_KEY` y tokens no deben llegar al frontend ni al control de versiones.
 - Turnstile protege `POST /api/v1/questions` cuando `TURNSTILE_ENABLED=true`. El frontend usa solo `VITE_TURNSTILE_SITE_KEY`; el backend valida el token con Cloudflare Siteverify usando `TURNSTILE_SECRET_KEY`.
 - Para pruebas locales con dummy keys oficiales de Cloudflare, deja `TURNSTILE_EXPECTED_ACTION=` y `TURNSTILE_EXPECTED_HOSTNAMES=` vacíos: esas credenciales sirven para comprobar `success=true`, pero pueden devolver metadata dummy no equivalente al entorno real.

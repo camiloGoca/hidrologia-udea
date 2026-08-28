@@ -63,6 +63,7 @@ Reglas:
 - las views consumen servicios, no Axios directamente;
 - `httpClient` usa `VITE_API_BASE_URL` con fallback `/api/v1`;
 - `adminHttpClient` obtiene el ID Token desde Firebase Auth y agrega `Authorization: Bearer` solo a requests admin;
+- en producción Firebase Hosting sirve la SPA y el navegador llama al backend desplegado en Northflank mediante `VITE_API_BASE_URL`;
 - solo variables `VITE_*` llegan al bundle;
 - no se persisten manualmente ID Tokens;
 - no se usa `v-html`.
@@ -215,6 +216,14 @@ Spring Security mantiene:
 - `/api/v1/admin/**` con rol `ADMIN`;
 - `anyRequest().denyAll()`.
 
+CORS:
+
+- se configura exclusivamente con `CORS_ALLOWED_ORIGINS`;
+- no se usa wildcard de origins;
+- si no hay origins configurados, el backend no abre CORS globalmente;
+- permite solo métodos y headers necesarios para la SPA y el panel admin;
+- no permite credenciales porque la autenticación admin viaja por `Authorization: Bearer`.
+
 Firebase:
 
 - frontend usa Firebase Web SDK solo para login;
@@ -337,6 +346,7 @@ Variables principales:
 DB_URL
 DB_USERNAME
 DB_PASSWORD
+CORS_ALLOWED_ORIGINS
 CLOUDINARY_ENABLED
 CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY

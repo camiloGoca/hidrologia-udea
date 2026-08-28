@@ -1,13 +1,17 @@
 package edu.udea.hidrologia.shared.security;
 
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -62,7 +68,10 @@ import edu.udea.hidrologia.tag.dto.UpsertTagRequest;
 import edu.udea.hidrologia.tag.service.AdminTagService;
 import edu.udea.hidrologia.tag.dto.TagResponse;
 
-@SpringBootTest(properties = "hidrologia.firebase.admin-uid=admin-uid")
+@SpringBootTest(properties = {
+        "hidrologia.firebase.admin-uid=admin-uid",
+        "hidrologia.cors.allowed-origins=https://hidrologia-udea.web.app,https://hidrologia-udea.firebaseapp.com"
+})
 @AutoConfigureMockMvc
 class SecurityConfigTest {
 
@@ -126,6 +135,53 @@ class SecurityConfigTest {
 
         mockMvc.perform(get("/api/v1/links"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsConfiguredCorsOriginOnApiRequests() throws Exception {
+        when(interestingLinkService.findActiveLinks()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.web.app"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea.web.app"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, not("*")));
+    }
+
+    @Test
+    void rejectsUnconfiguredCorsOriginWithoutAllowOriginHeader() throws Exception {
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://example.com"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void supportsPreflightOptionsForPublicApiEndpoints() throws Exception {
+        mockMvc.perform(options("/api/v1/questions")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.web.app")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type, Accept"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea.web.app"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString("POST")))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Content-Type")))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+    }
+
+    @Test
+    void allowsAuthorizationHeaderOnAdminPreflightRequests() throws Exception {
+        mockMvc.perform(options("/api/v1/admin/me")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.firebaseapp.com")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization, Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea.firebaseapp.com"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Authorization")))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, not("*")));
     }
 
     @Test
