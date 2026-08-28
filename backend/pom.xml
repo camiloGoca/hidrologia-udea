@@ -22,6 +22,7 @@
         <springdoc.version>3.1.0</springdoc.version>
         <cloudinary.version>2.4.0</cloudinary.version>
         <firebase-admin.version>9.10.0</firebase-admin.version>
+        <postgresql.version>42.7.12</postgresql.version>
     </properties>
 
     <dependencies>
