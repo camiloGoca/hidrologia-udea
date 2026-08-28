@@ -2,12 +2,12 @@ import type { AxiosResponse } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { httpClient } from '@/services/api/httpClient'
-import { getPostById, getPostsBySection, getPostsByTag } from '@/services/api/postService'
-import type { PostDetail, SectionPostsResponse, TagPostsResponse } from '@/types/post'
+import { getPostById, getPostsBySection, getPostsByTag, searchPosts } from '@/services/api/postService'
+import type { PostDetail, PostSearchResult, SectionPostsResponse, TagPostsResponse } from '@/types/post'
 
 vi.mock('@/services/api/httpClient', () => ({
   httpClient: {
-    get: vi.fn<(url: string) => Promise<AxiosResponse<unknown>>>(),
+    get: vi.fn<(url: string, config?: unknown) => Promise<AxiosResponse<unknown>>>(),
   },
 }))
 
@@ -78,5 +78,31 @@ describe('postService', () => {
 
     await expect(getPostsByTag('cuencas')).resolves.toEqual(payload)
     expect(mockedGet).toHaveBeenCalledWith('/tags/cuencas/posts')
+  })
+
+  it('searches published posts', async () => {
+    const payload: PostSearchResult[] = [
+      {
+        id: 10,
+        title: 'Balance hidrico',
+        section: {
+          id: 1,
+          type: 'TALLER',
+          name: 'Taller 1',
+          slug: 'taller-1',
+          description: null,
+        },
+        tags: [{ name: 'Cuencas', slug: 'cuencas' }],
+        snippet: 'Extracto seguro',
+        publishedAt: '2026-01-02T00:00:00Z',
+      },
+    ]
+
+    mockedGet.mockResolvedValue({ data: payload } as AxiosResponse<PostSearchResult[]>)
+
+    await expect(searchPosts('balance')).resolves.toEqual(payload)
+    expect(mockedGet).toHaveBeenCalledWith('/posts/search', {
+      params: { q: 'balance' },
+    })
   })
 })

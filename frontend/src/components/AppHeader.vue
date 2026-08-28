@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+const route = useRoute()
+const router = useRouter()
 const isMenuOpen = ref(false)
+const searchQuery = ref(String(route.query.q ?? ''))
 
 const navLinks = [
   { label: 'Inicio', to: { name: 'home' } },
@@ -10,8 +14,23 @@ const navLinks = [
   { label: 'Parciales', to: { name: 'exams' } },
 ]
 
+watch(
+  () => route.query.q,
+  (query) => {
+    searchQuery.value = String(query ?? '')
+  },
+)
+
 function closeMenu() {
   isMenuOpen.value = false
+}
+
+function submitSearch() {
+  router.push({
+    name: 'search',
+    query: { q: searchQuery.value.trim() },
+  })
+  closeMenu()
 }
 </script>
 
@@ -85,6 +104,19 @@ function closeMenu() {
           >
             Agregar una pregunta
           </RouterLink>
+
+          <form class="md:w-56 lg:w-64" role="search" @submit.prevent="submitSearch">
+            <label for="site-search" class="sr-only">Buscar en Hidrología</label>
+            <input
+              id="site-search"
+              v-model="searchQuery"
+              type="search"
+              name="q"
+              maxlength="100"
+              placeholder="Buscar en Hidrología..."
+              class="w-full rounded-full border border-cyan-100 bg-cyan-50 px-4 py-2 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-500 focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </form>
         </div>
       </div>
     </nav>

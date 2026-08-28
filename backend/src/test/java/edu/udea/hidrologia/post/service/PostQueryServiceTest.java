@@ -22,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
+import edu.udea.hidrologia.post.dto.PostSearchResultResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
 import edu.udea.hidrologia.post.entity.Post;
@@ -262,6 +263,58 @@ class PostQueryServiceTest {
         assertThatThrownBy(() -> postQueryService.findPublishedPostsByTag("desconocido"))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Tag not found");
+    }
+
+    @Test
+    void searchesPublishedPostsAndBuildsPlainTextSnippet() {
+        Section section = section();
+        Post post = publishedPost(section, Set.of(tag()));
+        when(postRepository.searchPublishedPosts("%cuenca%", PostStatus.PUBLISHED)).thenReturn(List.of(post));
+
+        List<PostSearchResultResponse> response = postQueryService.searchPublishedPosts(" Cuenca ");
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).title()).isEqualTo("Pregunta publicada");
+        assertThat(response.get(0).section().slug()).isEqualTo("taller-1");
+        assertThat(response.get(0).tags()).extracting("slug").containsExactly("morfometria");
+        assertThat(response.get(0).snippet()).isEqualTo("Contenido de texto seguro.");
+        assertThat(response.get(0).publishedAt()).isEqualTo(PUBLISHED_AT);
+        verify(postRepository).searchPublishedPosts("%cuenca%", PostStatus.PUBLISHED);
+    }
+
+    @Test
+    void createsShortSnippetAroundMatchWithoutHtml() {
+        Section section = section();
+        String content = "Inicio ".repeat(20) + "balance hidrico en la cuenca" + " cierre".repeat(20);
+        Post post = new Post(
+                1L,
+                section,
+                "Pregunta publicada",
+                content,
+                PostStatus.PUBLISHED,
+                CREATED_AT,
+                CREATED_AT,
+                PUBLISHED_AT,
+                Set.of());
+        when(postRepository.searchPublishedPosts("%balance%", PostStatus.PUBLISHED)).thenReturn(List.of(post));
+
+        List<PostSearchResultResponse> response = postQueryService.searchPublishedPosts("balance");
+
+        assertThat(response.get(0).snippet())
+                .contains("balance hidrico")
+                .doesNotContain("<mark>")
+                .hasSizeLessThanOrEqualTo(186);
+    }
+
+    @Test
+    void rejectsInvalidSearchQuery() {
+        assertThatThrownBy(() -> postQueryService.searchPublishedPosts(" c "))
+                .isInstanceOf(InvalidPostSearchQueryException.class)
+                .hasMessage("Search query must contain at least 2 characters.");
+
+        assertThatThrownBy(() -> postQueryService.searchPublishedPosts("a".repeat(101)))
+                .isInstanceOf(InvalidPostSearchQueryException.class)
+                .hasMessage("Search query must contain at most 100 characters.");
     }
 
     private Section section() {

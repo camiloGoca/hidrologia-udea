@@ -61,4 +61,28 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByTagSlugAndStatusOrderByPublishedAtDescIdDesc(
             @Param("slug") String slug,
             @Param("status") PostStatus status);
+
+    @EntityGraph(attributePaths = { "section", "tags" })
+    @Query("""
+            select p
+            from Post p
+            where p.status = :status
+              and (
+                lower(p.title) like lower(:query)
+                or lower(p.content) like lower(:query)
+                or exists (
+                    select tag
+                    from p.tags tag
+                    where lower(tag.name) like lower(:query)
+                       or lower(tag.slug) like lower(:query)
+                )
+              )
+            order by
+              case when lower(p.title) like lower(:query) then 0 else 1 end,
+              p.publishedAt desc,
+              p.id desc
+            """)
+    List<Post> searchPublishedPosts(
+            @Param("query") String query,
+            @Param("status") PostStatus status);
 }

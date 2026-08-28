@@ -22,6 +22,10 @@ export interface PostSummary {
   publishedAt: string
 }
 
+export interface PostSearchResult extends PostSummary {
+  snippet: string
+}
+
 export interface PostImage {
   id: number
   secureUrl: string

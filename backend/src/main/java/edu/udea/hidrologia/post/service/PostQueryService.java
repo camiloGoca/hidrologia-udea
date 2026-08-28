@@ -2,6 +2,7 @@ package edu.udea.hidrologia.post.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +11,7 @@ import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostImageResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
+import edu.udea.hidrologia.post.dto.PostSearchResultResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
@@ -27,6 +29,10 @@ import edu.udea.hidrologia.tag.repository.TagRepository;
 
 @Service
 public class PostQueryService {
+
+    private static final int MIN_SEARCH_QUERY_LENGTH = 2;
+    private static final int MAX_SEARCH_QUERY_LENGTH = 100;
+    private static final int SNIPPET_LENGTH = 180;
 
     private final PostRepository postRepository;
     private final PostImageRepository postImageRepository;
@@ -79,6 +85,16 @@ public class PostQueryService {
         return new TagPostsResponse(toTagResponse(tag), posts);
     }
 
+    @Transactional(readOnly = true)
+    public List<PostSearchResultResponse> searchPublishedPosts(String query) {
+        String normalizedQuery = normalizeSearchQuery(query);
+        String likeQuery = "%" + normalizedQuery.toLowerCase(Locale.ROOT) + "%";
+
+        return postRepository.searchPublishedPosts(likeQuery, PostStatus.PUBLISHED).stream()
+                .map(post -> toSearchResultResponse(post, normalizedQuery))
+                .toList();
+    }
+
     private PostSummaryResponse toSummaryResponse(Post post) {
         return new PostSummaryResponse(
                 post.getId(),
@@ -97,6 +113,16 @@ public class PostQueryService {
                 toSectionResponse(post.getSection()),
                 toTagResponses(post),
                 toReferencedImageResponses(post),
+                post.getPublishedAt());
+    }
+
+    private PostSearchResultResponse toSearchResultResponse(Post post, String query) {
+        return new PostSearchResultResponse(
+                post.getId(),
+                post.getTitle(),
+                toSectionResponse(post.getSection()),
+                toTagResponses(post),
+                buildSnippet(post.getContent(), query),
                 post.getPublishedAt());
     }
 
@@ -139,5 +165,38 @@ public class PostQueryService {
                 image.getWidth(),
                 image.getHeight(),
                 image.getAltText());
+    }
+
+    private String normalizeSearchQuery(String query) {
+        if (query == null) {
+            throw new InvalidPostSearchQueryException("Search query must contain at least 2 characters.");
+        }
+
+        String normalized = query.strip();
+        if (normalized.length() < MIN_SEARCH_QUERY_LENGTH) {
+            throw new InvalidPostSearchQueryException("Search query must contain at least 2 characters.");
+        }
+        if (normalized.length() > MAX_SEARCH_QUERY_LENGTH) {
+            throw new InvalidPostSearchQueryException("Search query must contain at most 100 characters.");
+        }
+
+        return normalized;
+    }
+
+    private String buildSnippet(String content, String query) {
+        String normalizedContent = content == null ? "" : content.replaceAll("\\s+", " ").strip();
+        if (normalizedContent.length() <= SNIPPET_LENGTH) {
+            return normalizedContent;
+        }
+
+        int matchIndex = normalizedContent.toLowerCase(Locale.ROOT).indexOf(query.toLowerCase(Locale.ROOT));
+        int start = matchIndex < 0 ? 0 : Math.max(0, matchIndex - 60);
+        int end = Math.min(normalizedContent.length(), start + SNIPPET_LENGTH);
+        start = Math.max(0, end - SNIPPET_LENGTH);
+
+        String prefix = start > 0 ? "..." : "";
+        String suffix = end < normalizedContent.length() ? "..." : "";
+
+        return prefix + normalizedContent.substring(start, end).strip() + suffix;
     }
 }

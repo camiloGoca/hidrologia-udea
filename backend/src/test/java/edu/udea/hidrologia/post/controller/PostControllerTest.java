@@ -20,9 +20,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
 import edu.udea.hidrologia.post.dto.PostImageResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
+import edu.udea.hidrologia.post.dto.PostSearchResultResponse;
 import edu.udea.hidrologia.post.dto.PostSummaryResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
+import edu.udea.hidrologia.post.service.InvalidPostSearchQueryException;
 import edu.udea.hidrologia.post.service.PostQueryService;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
@@ -133,6 +135,40 @@ class PostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tag.slug", is("morfometria")))
                 .andExpect(jsonPath("$.posts", hasSize(1)));
+    }
+
+    @Test
+    void searchesPublishedPosts() throws Exception {
+        when(postQueryService.searchPublishedPosts("balance"))
+                .thenReturn(List.of(new PostSearchResultResponse(
+                        1L,
+                        "Balance hidrico",
+                        section(),
+                        List.of(tag()),
+                        "Extracto seguro sin HTML",
+                        PUBLISHED_AT)));
+
+        mockMvc.perform(get("/api/v1/posts/search").param("q", "balance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[0].title", is("Balance hidrico")))
+                .andExpect(jsonPath("$[0].section.slug", is("taller-1")))
+                .andExpect(jsonPath("$[0].tags[0].slug", is("morfometria")))
+                .andExpect(jsonPath("$[0].snippet", is("Extracto seguro sin HTML")))
+                .andExpect(jsonPath("$[0].contentDocument").doesNotExist())
+                .andExpect(jsonPath("$[0].sourceQuestion").doesNotExist())
+                .andExpect(jsonPath("$[0].images").doesNotExist());
+    }
+
+    @Test
+    void returnsBadRequestForInvalidSearchQuery() throws Exception {
+        when(postQueryService.searchPublishedPosts(""))
+                .thenThrow(new InvalidPostSearchQueryException("Search query must contain at least 2 characters."));
+
+        mockMvc.perform(get("/api/v1/posts/search"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Search query must contain at least 2 characters.")));
     }
 
     @Test

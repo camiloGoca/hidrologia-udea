@@ -29,6 +29,7 @@ import edu.udea.hidrologia.link.service.InterestingLinkService;
 import edu.udea.hidrologia.link.service.AdminInterestingLinkService;
 import edu.udea.hidrologia.link.dto.AdminInterestingLinkResponse;
 import edu.udea.hidrologia.post.dto.PostDetailResponse;
+import edu.udea.hidrologia.post.dto.PostSearchResultResponse;
 import edu.udea.hidrologia.post.dto.PostSectionResponse;
 import edu.udea.hidrologia.post.dto.SectionPostsResponse;
 import edu.udea.hidrologia.post.dto.TagPostsResponse;
@@ -154,6 +155,20 @@ class SecurityConfigTest {
                         null));
 
         mockMvc.perform(get("/api/v1/posts/1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsPublicPostSearchEndpoint() throws Exception {
+        when(postQueryService.searchPublishedPosts("balance")).thenReturn(List.of(new PostSearchResultResponse(
+                1L,
+                "Balance",
+                new PostSectionResponse(1L, SectionType.TALLER, "Taller 1", "taller-1", "Morfometria"),
+                List.of(),
+                "Snippet",
+                Instant.parse("2026-01-02T00:00:00Z"))));
+
+        mockMvc.perform(get("/api/v1/posts/search").param("q", "balance"))
                 .andExpect(status().isOk());
     }
 

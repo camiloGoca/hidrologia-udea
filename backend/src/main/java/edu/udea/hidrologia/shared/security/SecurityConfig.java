@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/links").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sections").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sections/{slug}/posts").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/posts/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/posts/{id}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/tags/{slug}/posts").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/questions").permitAll()

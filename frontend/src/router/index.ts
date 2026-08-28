@@ -8,6 +8,7 @@ import LinksView from '@/views/static/LinksView.vue'
 import NewQuestionView from '@/views/static/NewQuestionView.vue'
 import NotFoundView from '@/views/static/NotFoundView.vue'
 import PostDetailView from '@/views/posts/PostDetailView.vue'
+import SearchView from '@/views/posts/SearchView.vue'
 import AdminQuestionDetailView from '@/views/admin/AdminQuestionDetailView.vue'
 import AdminQuestionsView from '@/views/admin/AdminQuestionsView.vue'
 import AdminPostEditorView from '@/views/admin/AdminPostEditorView.vue'
@@ -64,6 +65,11 @@ const router = createRouter({
           path: 'publicaciones/:id',
           name: 'post-detail',
           component: PostDetailView,
+        },
+        {
+          path: 'buscar',
+          name: 'search',
+          component: SearchView,
         },
         {
           path: 'hashtags/:slug',

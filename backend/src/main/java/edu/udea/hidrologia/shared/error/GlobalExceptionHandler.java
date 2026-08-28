@@ -18,6 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import edu.udea.hidrologia.post.content.InvalidPostContentDocumentException;
 import edu.udea.hidrologia.post.service.InvalidPostDraftRequestException;
 import edu.udea.hidrologia.post.service.InvalidPostPublicationException;
+import edu.udea.hidrologia.post.service.InvalidPostSearchQueryException;
 import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.question.service.InvalidQuestionStatusTransitionException;
 import edu.udea.hidrologia.question.service.QuestionDraftConflictException;
@@ -107,6 +108,7 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
             InvalidInterestingLinkRequestException.class,
+            InvalidPostSearchQueryException.class,
             InvalidTagRequestException.class,
             InvalidPostContentDocumentException.class
     })
