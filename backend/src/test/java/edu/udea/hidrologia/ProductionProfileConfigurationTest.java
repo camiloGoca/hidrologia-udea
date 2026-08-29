@@ -24,6 +24,13 @@ class ProductionProfileConfigurationTest {
         assertThat(properties.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME}");
         assertThat(properties.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD}");
         assertThat(properties.getProperty("spring.datasource.driver-class-name")).isEqualTo("org.postgresql.Driver");
+        assertThat(properties.getProperty("spring.datasource.hikari.minimum-idle"))
+                .isEqualTo("${DB_POOL_MIN_IDLE:0}");
+        assertThat(properties.getProperty("spring.datasource.hikari.maximum-pool-size"))
+                .isEqualTo("${DB_POOL_MAX_SIZE:3}");
+        assertThat(properties.getProperty("spring.datasource.hikari.idle-timeout"))
+                .isEqualTo("${DB_POOL_IDLE_TIMEOUT_MS:60000}");
+        assertThat(properties.getProperty("spring.datasource.hikari.keepalive-time")).isNull();
         assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo(true);
         assertThat(properties.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration");
         assertThat(properties.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
