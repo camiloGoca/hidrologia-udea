@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Run backend tests
+        run: mvn -B test
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: https://example.invalid/api/v1
+      VITE_FIREBASE_API_KEY: ci-placeholder
+      VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: ci-placeholder
+      VITE_FIREBASE_APP_ID: ci-placeholder
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ci-placeholder
+      VITE_TURNSTILE_SITE_KEY: ci-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Type-check frontend
+        run: npm run type-check
+
+      - name: Run frontend unit tests
+        run: npm run test:unit
+
+      - name: Check frontend lint
+        run: npm run lint:check
+
+      - name: Build frontend
+        run: npm run build
