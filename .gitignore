@@ -47,3 +47,8 @@ hs_err_pid*
 # Docker and local runtime
 docker-data/
 tmp/
+
+# Firebase CLI local files
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
