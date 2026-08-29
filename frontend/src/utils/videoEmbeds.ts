@@ -123,23 +123,23 @@ function parseTiktokUrl(url: URL, sourceUrl: string): VideoParseResult {
 }
 
 function extractYoutubeVideoId(url: URL): string | null {
+  const segments = pathSegments(url)
   if (url.hostname.toLowerCase() === 'youtu.be') {
-    return pathSegment(url, 0)
+    return segments.length === 1 ? (segments[0] ?? null) : null
   }
 
   if (url.pathname === '/watch') {
     return url.searchParams.get('v')
   }
 
-  if (url.pathname.startsWith('/shorts/')) {
-    return pathSegment(url, 1)
+  if (segments.length === 2 && segments[0] === 'shorts') {
+    return segments[1] ?? null
   }
 
-  if (url.pathname.startsWith('/embed/')) {
-    return pathSegment(url, 1)
+  if (segments.length === 2 && segments[0] === 'embed') {
+    return segments[1] ?? null
   }
 
-  const segments = pathSegments(url)
   if (segments.length === 2 && segments[0] === 'live') {
     return segments[1] ?? null
   }
@@ -164,12 +164,8 @@ function extractTiktokVideoId(url: URL): string | null {
   return null
 }
 
-function pathSegment(url: URL, index: number): string | null {
-  return pathSegments(url)[index] ?? null
-}
-
 function pathSegments(url: URL): string[] {
-  return url.pathname.replace(/^\/+/, '').split('/').filter(Boolean)
+  return url.pathname.replace(/^\/+/, '').split('/')
 }
 
 function isYoutubeVideoId(value: string | null | undefined): value is string {

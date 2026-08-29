@@ -586,20 +586,20 @@ public class PostContentDocumentService {
     private String extractYoutubeVideoId(URI uri) {
         String host = normalizedHost(uri);
         String path = uri.getPath() == null ? "" : uri.getPath();
+        String[] segments = pathSegments(path);
         if ("youtu.be".equals(host)) {
-            return firstPathSegment(path);
+            return segments.length == 1 ? segments[0] : null;
         }
         if ("/watch".equals(path)) {
             return queryParam(uri, "v");
         }
-        if (path.startsWith("/shorts/")) {
-            return pathSegment(path, 1);
+        if (segments.length == 2 && "shorts".equals(segments[0])) {
+            return segments[1];
         }
-        if (path.startsWith("/embed/")) {
-            return pathSegment(path, 1);
+        if (segments.length == 2 && "embed".equals(segments[0])) {
+            return segments[1];
         }
 
-        String[] segments = pathSegments(path);
         if (segments.length == 2 && "live".equals(segments[0])) {
             return segments[1];
         }
@@ -621,18 +621,8 @@ public class PostContentDocumentService {
         return null;
     }
 
-    private String firstPathSegment(String path) {
-        return pathSegment(path, 0);
-    }
-
-    private String pathSegment(String path, int index) {
-        String[] segments = pathSegments(path);
-
-        return index >= 0 && index < segments.length ? segments[index] : null;
-    }
-
     private String[] pathSegments(String path) {
-        return path == null ? new String[0] : path.replaceFirst("^/+", "").split("/");
+        return path == null ? new String[0] : path.replaceFirst("^/+", "").split("/", -1);
     }
 
     private String queryParam(URI uri, String name) {

@@ -569,6 +569,16 @@ class PostContentDocumentServiceTest {
                 """,
                 """
                 "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live//abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/abc_DEF1234/",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
                 "sourceUrl": "https://www.youtube.com/live/abc_DEF1234/extra",
                 "videoId": "abc_DEF1234"
                 """,
@@ -576,6 +586,16 @@ class PostContentDocumentServiceTest {
                 "provider": "youtube",
                 "sourceUrl": "https://www.youtube.com/live/abc_DEF1234",
                 "videoId": "different1"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/shorts//abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/embed//abc_DEF1234",
+                "videoId": "abc_DEF1234"
                 """,
                 """
                 "provider": "tiktok",
@@ -595,6 +615,16 @@ class PostContentDocumentServiceTest {
                 """
                 "provider": "tiktok",
                 "sourceUrl": "https://www.tiktok.com/@usuario/otro/123456789",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@usuario//video/123456789",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@usuario/video//123456789",
                 "videoId": "123456789"
                 """,
                 """
