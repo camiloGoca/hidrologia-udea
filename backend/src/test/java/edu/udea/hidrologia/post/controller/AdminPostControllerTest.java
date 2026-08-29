@@ -187,7 +187,7 @@ class AdminPostControllerTest {
         mockMvc.perform(delete("/api/v1/admin/posts/10"))
                 .andExpect(status().isNoContent());
 
-        Mockito.verify(adminPostService).discardManualDraft(10L);
+        Mockito.verify(adminPostService).deletePost(10L);
     }
 
     @Test

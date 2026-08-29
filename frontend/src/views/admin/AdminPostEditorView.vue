@@ -8,6 +8,7 @@ import PostContentRenderer from '@/components/PostContentRenderer'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  deleteAdminPost,
   deleteAdminPostImage,
   discardManualAdminPost,
   getAdminPost,
@@ -32,7 +33,7 @@ import type { Section, SectionType } from '@/types/section'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
 import { extractPostContentText, samePostContent } from '@/utils/postContent'
 
-type ConfirmationAction = 'discard' | 'publish' | 'archive' | 'restore'
+type ConfirmationAction = 'discard' | 'publish' | 'archive' | 'restore' | 'deletePermanent'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,6 +166,17 @@ const confirmationConfig = computed(() => {
         description: 'Volverá a ser visible para los estudiantes.',
         confirmLabel: 'Restaurar publicación',
         confirmClass: 'bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-800',
+      }
+    case 'deletePermanent':
+      return {
+        title: sourceQuestion.value
+          ? '¿Eliminar esta publicación y su pregunta original?'
+          : '¿Eliminar esta publicación definitivamente?',
+        description: sourceQuestion.value
+          ? 'Esta publicación proviene de una pregunta de estudiante. Se eliminarán definitivamente la publicación, sus imágenes, la pregunta original y su imagen adjunta. Esta acción no se puede deshacer.'
+          : 'Se eliminarán también sus imágenes y sus datos de visualización. Esta acción no se puede deshacer.',
+        confirmLabel: 'Eliminar definitivamente',
+        confirmClass: 'bg-red-800 hover:bg-red-900 focus-visible:outline-red-900',
       }
     default:
       return null
@@ -359,6 +371,16 @@ async function confirmAction() {
       return
     }
 
+    if (pendingAction.value === 'deletePermanent') {
+      await deleteAdminPost(post.value.id)
+      pendingAction.value = null
+      await router.push({
+        name: 'admin-posts',
+        query: { estado: 'archivadas' },
+      })
+      return
+    }
+
     const updatedPost = await runPostAction(pendingAction.value, post.value.id)
     post.value = updatedPost
     syncForm(updatedPost)
@@ -383,10 +405,12 @@ function canRunAction(action: ConfirmationAction): boolean {
       return canArchive.value
     case 'restore':
       return canRestore.value
+    case 'deletePermanent':
+      return isArchived.value && !isBusy.value
   }
 }
 
-function runPostAction(action: Exclude<ConfirmationAction, 'discard'>, id: number) {
+function runPostAction(action: Exclude<ConfirmationAction, 'discard' | 'deletePermanent'>, id: number) {
   switch (action) {
     case 'publish':
       return publishAdminPost(id)
@@ -405,6 +429,8 @@ function successMessageFor(action: ConfirmationAction): string {
       return 'Publicación archivada.'
     case 'restore':
       return 'Publicación restaurada.'
+    case 'deletePermanent':
+      return ''
     case 'discard':
       return ''
   }
@@ -576,6 +602,15 @@ function unusedImageDeleteMessage(error: unknown): string {
                 @click="openConfirmation('restore')"
               >
                 Restaurar publicación
+              </button>
+              <button
+                v-if="isArchived"
+                type="button"
+                class="rounded-2xl bg-red-800 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-900 disabled:cursor-not-allowed disabled:bg-slate-400"
+                :disabled="isBusy"
+                @click="openConfirmation('deletePermanent')"
+              >
+                Eliminar definitivamente
               </button>
             </div>
           </div>

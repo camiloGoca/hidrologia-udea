@@ -6,6 +6,7 @@ import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveQuestion,
   createQuestionDraft,
+  deleteRejectedQuestion,
   discardQuestionDraft,
   getQuestionById,
   rejectQuestion,
@@ -16,7 +17,7 @@ import type { AdminQuestionDetail } from '@/types/adminQuestion'
 import { adminPostStatusLabel } from '@/utils/adminPostStatus'
 import { adminQuestionStatusLabel } from '@/utils/adminQuestionStatus'
 
-type QuestionAction = 'createDraft' | 'discardDraft' | 'archive' | 'reject' | 'reopen'
+type QuestionAction = 'createDraft' | 'discardDraft' | 'archive' | 'reject' | 'reopen' | 'delete'
 
 const ACTION_CONFIG = {
   createDraft: {
@@ -65,6 +66,16 @@ const ACTION_CONFIG = {
     buttonClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
     confirmClass: 'bg-sky-950 hover:bg-sky-900 focus-visible:outline-sky-950',
   },
+  delete: {
+    label: 'Eliminar definitivamente',
+    title: '¿Eliminar esta pregunta definitivamente?',
+    description:
+      'La pregunta y su imagen adjunta, si existe, serán eliminadas. Esta acción no se puede deshacer.',
+    confirmLabel: 'Eliminar definitivamente',
+    successMessage: '',
+    buttonClass: 'bg-red-800 hover:bg-red-900 focus-visible:outline-red-900',
+    confirmClass: 'bg-red-800 hover:bg-red-900 focus-visible:outline-red-900',
+  },
 } as const
 
 const route = useRoute()
@@ -93,8 +104,12 @@ const availableActions = computed<QuestionAction[]>(() => {
     return hasDraft.value ? ['discardDraft'] : ['createDraft', 'archive', 'reject']
   }
 
-  if (question.value.status === 'ARCHIVED' || question.value.status === 'REJECTED') {
-    return ['reopen']
+  if (question.value.status === 'REJECTED') {
+    return question.value.linkedPost ? [] : ['reopen', 'delete']
+  }
+
+  if (question.value.status === 'ARCHIVED') {
+    return question.value.linkedPost ? [] : ['reopen']
   }
 
   return []
@@ -179,6 +194,13 @@ async function confirmAction() {
       return
     }
 
+    if (pendingAction.value === 'delete') {
+      await deleteRejectedQuestion(question.value.id)
+      pendingAction.value = null
+      await router.push({ name: 'admin-questions', query: { estado: 'rechazadas' } })
+      return
+    }
+
     const result = await runStatusAction(pendingAction.value, question.value.id)
     question.value = {
       ...question.value,
@@ -200,7 +222,7 @@ async function confirmAction() {
   }
 }
 
-function runStatusAction(action: Exclude<QuestionAction, 'createDraft' | 'discardDraft'>, id: number) {
+function runStatusAction(action: Exclude<QuestionAction, 'createDraft' | 'discardDraft' | 'delete'>, id: number) {
   switch (action) {
     case 'archive':
       return archiveQuestion(id)

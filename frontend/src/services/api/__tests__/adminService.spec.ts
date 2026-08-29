@@ -5,6 +5,7 @@ import { adminHttpClient } from '@/services/api/adminHttpClient'
 import {
   archiveQuestion,
   createQuestionDraft,
+  deleteRejectedQuestion,
   discardQuestionDraft,
   getAdminMe,
   getPendingQuestions,
@@ -125,16 +126,18 @@ describe('adminService', () => {
     expect(mockedPost).toHaveBeenNthCalledWith(3, '/admin/questions/3/reopen')
   })
 
-  it('creates and discards a question draft through the admin http client', async () => {
+  it('creates discards and permanently deletes through the admin http client', async () => {
     const draft = adminPost()
     mockedPost.mockResolvedValue({ data: draft } as AxiosResponse<AdminPost>)
     mockedDelete.mockResolvedValue({ data: undefined } as AxiosResponse<void>)
 
     await expect(createQuestionDraft(1)).resolves.toEqual(draft)
     await expect(discardQuestionDraft(1)).resolves.toBeUndefined()
+    await expect(deleteRejectedQuestion(1)).resolves.toBeUndefined()
 
     expect(mockedPost).toHaveBeenCalledWith('/admin/questions/1/draft')
     expect(mockedDelete).toHaveBeenCalledWith('/admin/questions/1/draft')
+    expect(mockedDelete).toHaveBeenCalledWith('/admin/questions/1')
   })
 
 })

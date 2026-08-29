@@ -29,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import tools.jackson.databind.json.JsonMapper;
 
+import edu.udea.hidrologia.analytics.repository.AnalyticsRepository;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostsResponse;
@@ -41,6 +42,8 @@ import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.QuestionAttachment;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
+import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
+import edu.udea.hidrologia.question.service.QuestionAttachmentCleanupService;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
@@ -66,12 +69,21 @@ class AdminPostServiceTest {
     @Mock
     private TagRepository tagRepository;
 
+    @Mock
+    private StudentQuestionRepository studentQuestionRepository;
+
+    @Mock
+    private AnalyticsRepository analyticsRepository;
+
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final PostContentDocumentService postContentDocumentService = new PostContentDocumentService(JSON_MAPPER);
 
     @Mock
     private PostImageCleanupService postImageCleanupService;
+
+    @Mock
+    private QuestionAttachmentCleanupService questionAttachmentCleanupService;
 
     private AdminPostService adminPostService;
 
@@ -82,8 +94,11 @@ class AdminPostServiceTest {
                 postImageRepository,
                 sectionRepository,
                 tagRepository,
+                studentQuestionRepository,
+                analyticsRepository,
                 postContentDocumentService,
                 postImageCleanupService,
+                questionAttachmentCleanupService,
                 Clock.fixed(UPDATED_AT, ZoneOffset.UTC));
     }
 
@@ -625,6 +640,30 @@ class AdminPostServiceTest {
     }
 
     @Test
+    void deletePostPreservesManualDraftDiscardBehavior() {
+        Post manualDraft = new Post(
+                10L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "",
+                "",
+                PostStatus.DRAFT,
+                NOW,
+                NOW,
+                null,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(10L)).thenReturn(Optional.of(manualDraft));
+
+        adminPostService.deletePost(10L);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(postImageCleanupService, postRepository);
+        inOrder.verify(postImageCleanupService).deleteAllForPost(10L);
+        inOrder.verify(postRepository).delete(manualDraft);
+        verify(analyticsRepository, never()).deletePostViewsForPost(10L);
+        verify(studentQuestionRepository, never()).delete(org.mockito.Mockito.any());
+    }
+
+    @Test
     void preservesManualDraftWhenPostImageCleanupFails() {
         Post manualDraft = new Post(
                 10L,
@@ -663,6 +702,19 @@ class AdminPostServiceTest {
     }
 
     @Test
+    void rejectsDeletingQuestionDraftThroughPostEndpoint() {
+        StudentQuestion question = question();
+        Post questionDraft = draftPost(question);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(questionDraft));
+
+        assertThatThrownBy(() -> adminPostService.deletePost(9L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Only manual draft posts can be discarded here");
+
+        verify(postRepository, never()).delete(questionDraft);
+    }
+
+    @Test
     void rejectsDiscardingPublishedOrArchivedPostsManually() {
         Post published = new Post(
                 11L,
@@ -681,6 +733,171 @@ class AdminPostServiceTest {
                 .isInstanceOf(PostStateConflictException.class);
 
         verify(postRepository, never()).delete(published);
+    }
+
+    @Test
+    void rejectsDeletingPublishedPosts() {
+        Post published = new Post(
+                11L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "Titulo",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(published));
+
+        assertThatThrownBy(() -> adminPostService.deletePost(11L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Only archived posts can be deleted permanently");
+
+        verify(postRepository, never()).delete(published);
+    }
+
+    @Test
+    void deletesArchivedManualPostAfterImagesAndAnalyticsCleanup() {
+        Post archived = new Post(
+                11L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(archived));
+
+        adminPostService.deletePost(11L);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                postImageCleanupService,
+                analyticsRepository,
+                postRepository);
+        inOrder.verify(postImageCleanupService).deleteAllForPost(11L);
+        inOrder.verify(analyticsRepository).deletePostViewsForPost(11L);
+        inOrder.verify(postRepository).delete(archived);
+        inOrder.verify(postRepository).flush();
+        verify(studentQuestionRepository, never()).delete(org.mockito.Mockito.any());
+        verify(questionAttachmentCleanupService, never()).deleteRemoteAttachment(org.mockito.Mockito.any());
+    }
+
+    @Test
+    void deletesArchivedLinkedPostAndThenSourceQuestion() {
+        StudentQuestion question = withAttachment(question());
+        question.transitionTo(StudentQuestionStatus.PUBLISHED, NOW);
+        question.transitionTo(StudentQuestionStatus.ARCHIVED, UPDATED_AT);
+        Post archived = new Post(
+                11L,
+                question.getSection(),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                UPDATED_AT,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(archived));
+
+        adminPostService.deletePost(11L);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                postImageCleanupService,
+                questionAttachmentCleanupService,
+                analyticsRepository,
+                postRepository,
+                studentQuestionRepository);
+        inOrder.verify(postImageCleanupService).deleteAllForPost(11L);
+        inOrder.verify(questionAttachmentCleanupService).deleteRemoteAttachment(question.getAttachment());
+        inOrder.verify(analyticsRepository).deletePostViewsForPost(11L);
+        inOrder.verify(postRepository).delete(archived);
+        inOrder.verify(postRepository).flush();
+        inOrder.verify(studentQuestionRepository).delete(question);
+    }
+
+    @Test
+    void rejectsDeletingArchivedLinkedPostWhenSourceQuestionIsNotArchived() {
+        StudentQuestion question = question();
+        question.transitionTo(StudentQuestionStatus.PUBLISHED, NOW);
+        Post archived = new Post(
+                11L,
+                question.getSection(),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                UPDATED_AT,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(archived));
+
+        assertThatThrownBy(() -> adminPostService.deletePost(11L))
+                .isInstanceOf(PostStateConflictException.class)
+                .hasMessage("Source question must be archived before deleting the post");
+
+        verify(postRepository, never()).delete(archived);
+        verify(studentQuestionRepository, never()).delete(question);
+    }
+
+    @Test
+    void keepsArchivedPostWhenPostImageCleanupFails() {
+        Post archived = new Post(
+                11L,
+                section(1L, SectionType.TALLER, "Taller 1", "taller-1"),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                NOW,
+                NOW,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(archived));
+        org.mockito.Mockito.doThrow(new PostStateConflictException("Post images could not be deleted. Try again."))
+                .when(postImageCleanupService)
+                .deleteAllForPost(11L);
+
+        assertThatThrownBy(() -> adminPostService.deletePost(11L))
+                .isInstanceOf(PostStateConflictException.class);
+
+        verify(analyticsRepository, never()).deletePostViewsForPost(11L);
+        verify(postRepository, never()).delete(archived);
+    }
+
+    @Test
+    void keepsArchivedLinkedPostWhenQuestionAttachmentCleanupFails() {
+        StudentQuestion question = withAttachment(question());
+        question.transitionTo(StudentQuestionStatus.PUBLISHED, NOW);
+        question.transitionTo(StudentQuestionStatus.ARCHIVED, UPDATED_AT);
+        Post archived = new Post(
+                11L,
+                question.getSection(),
+                "Titulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                NOW,
+                UPDATED_AT,
+                NOW,
+                Set.of(),
+                question);
+        when(postRepository.findAdminById(11L)).thenReturn(Optional.of(archived));
+        org.mockito.Mockito.doThrow(new edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException(
+                "Image uploads are temporarily unavailable"))
+                .when(questionAttachmentCleanupService)
+                .deleteRemoteAttachment(question.getAttachment());
+
+        assertThatThrownBy(() -> adminPostService.deletePost(11L))
+                .isInstanceOf(edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException.class);
+
+        verify(analyticsRepository, never()).deletePostViewsForPost(11L);
+        verify(postRepository, never()).delete(archived);
+        verify(studentQuestionRepository, never()).delete(question);
     }
 
     @Test

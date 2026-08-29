@@ -61,6 +61,10 @@ export async function reopenQuestion(id: number): Promise<AdminQuestionStatusUpd
   return response.data
 }
 
+export async function deleteRejectedQuestion(id: number): Promise<void> {
+  await adminHttpClient.delete(`/admin/questions/${id}`)
+}
+
 export async function createQuestionDraft(questionId: number): Promise<AdminPost> {
   const response = await adminHttpClient.post<AdminPost>(`/admin/questions/${questionId}/draft`)
 

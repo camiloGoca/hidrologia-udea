@@ -46,14 +46,17 @@ public class AdminQuestionService {
 
     private final StudentQuestionRepository studentQuestionRepository;
     private final PostRepository postRepository;
+    private final QuestionAttachmentCleanupService questionAttachmentCleanupService;
     private final Clock clock;
 
     public AdminQuestionService(
             StudentQuestionRepository studentQuestionRepository,
             PostRepository postRepository,
+            QuestionAttachmentCleanupService questionAttachmentCleanupService,
             Clock clock) {
         this.studentQuestionRepository = studentQuestionRepository;
         this.postRepository = postRepository;
+        this.questionAttachmentCleanupService = questionAttachmentCleanupService;
         this.clock = clock;
     }
 
@@ -118,7 +121,28 @@ public class AdminQuestionService {
             throw new InvalidQuestionStatusTransitionException();
         }
 
+        if (postRepository.existsBySourceQuestionId(question.getId())) {
+            throw new QuestionDraftConflictException("This question has a linked post");
+        }
+
         return updateStatus(question, StudentQuestionStatus.PENDING);
+    }
+
+    @Transactional
+    public void deleteRejectedQuestion(Long id) {
+        StudentQuestion question = studentQuestionRepository.findByIdWithSectionAndAttachment(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+
+        if (question.getStatus() != StudentQuestionStatus.REJECTED) {
+            throw new InvalidQuestionStatusTransitionException();
+        }
+
+        if (postRepository.existsBySourceQuestionId(question.getId())) {
+            throw new QuestionDraftConflictException("This question has a linked post");
+        }
+
+        questionAttachmentCleanupService.deleteRemoteAttachment(question.getAttachment());
+        studentQuestionRepository.delete(question);
     }
 
     private AdminQuestionStatusUpdateResponse transitionQuestion(

@@ -541,6 +541,10 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/questions/1/reject"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401));
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
     }
 
     @Test
@@ -563,6 +567,11 @@ class SecurityConfigTest {
                 .header("Authorization", "Bearer other-user-token"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403));
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1")
+                .header("Authorization", "Bearer other-user-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
     }
 
     @Test
@@ -581,6 +590,10 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/questions/1/reopen")
                 .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1")
+                .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isNoContent());
     }
 
     @Test

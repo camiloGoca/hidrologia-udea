@@ -5,6 +5,7 @@ import { adminHttpClient } from '@/services/api/adminHttpClient'
 import {
   archiveAdminPost,
   createAdminPost,
+  deleteAdminPost,
   discardManualAdminPost,
   getAdminPost,
   getPostsByStatus,
@@ -155,11 +156,13 @@ describe('adminPostService', () => {
     expect(mockedPost).toHaveBeenNthCalledWith(3, '/admin/posts/9/restore')
   })
 
-  it('discards a manual draft through the admin http client', async () => {
+  it('deletes a post or discards a manual draft through the admin http client', async () => {
     mockedDelete.mockResolvedValue({ data: undefined } as AxiosResponse<void>)
 
+    await expect(deleteAdminPost(9)).resolves.toBeUndefined()
     await expect(discardManualAdminPost(10)).resolves.toBeUndefined()
 
+    expect(mockedDelete).toHaveBeenCalledWith('/admin/posts/9')
     expect(mockedDelete).toHaveBeenCalledWith('/admin/posts/10')
   })
 

@@ -53,6 +53,13 @@ public class AdminQuestionController {
         return adminQuestionService.findQuestionById(id);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRejectedQuestion(@PathVariable Long id) {
+        adminQuestionService.deleteRejectedQuestion(id);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{id}/reject")
     public AdminQuestionStatusUpdateResponse rejectQuestion(@PathVariable Long id) {
         return adminQuestionService.rejectQuestion(id);

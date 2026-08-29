@@ -5,6 +5,7 @@ import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveQuestion,
   createQuestionDraft,
+  deleteRejectedQuestion,
   discardQuestionDraft,
   getQuestionById,
   rejectQuestion,
@@ -31,6 +32,7 @@ vi.mock('vue-router', async (importOriginal) => {
 vi.mock('@/services/api/adminService', () => ({
   getQuestionById: vi.fn<(id: number) => Promise<AdminQuestionDetail>>(),
   createQuestionDraft: vi.fn<(id: number) => Promise<unknown>>(),
+  deleteRejectedQuestion: vi.fn<(id: number) => Promise<void>>(),
   discardQuestionDraft: vi.fn<(id: number) => Promise<void>>(),
   rejectQuestion: vi.fn<(id: number) => Promise<AdminQuestionStatusUpdateResponse>>(),
   archiveQuestion: vi.fn<(id: number) => Promise<AdminQuestionStatusUpdateResponse>>(),
@@ -47,6 +49,7 @@ vi.mock('@/services/firebase/authService', () => ({
 
 const mockedGetQuestionById = vi.mocked(getQuestionById)
 const mockedCreateQuestionDraft = vi.mocked(createQuestionDraft)
+const mockedDeleteRejectedQuestion = vi.mocked(deleteRejectedQuestion)
 const mockedDiscardQuestionDraft = vi.mocked(discardQuestionDraft)
 const mockedRejectQuestion = vi.mocked(rejectQuestion)
 const mockedArchiveQuestion = vi.mocked(archiveQuestion)
@@ -61,6 +64,7 @@ describe('AdminQuestionDetailView', () => {
     routerPush.mockReset()
     mockedGetQuestionById.mockReset()
     mockedCreateQuestionDraft.mockReset()
+    mockedDeleteRejectedQuestion.mockReset()
     mockedDiscardQuestionDraft.mockReset()
     mockedRejectQuestion.mockReset()
     mockedArchiveQuestion.mockReset()
@@ -204,7 +208,7 @@ describe('AdminQuestionDetailView', () => {
     expect(wrapper.text()).toContain('Rechazar')
   })
 
-  it('shows reopen action for archived questions', async () => {
+  it('shows reopen action for archived questions without a linked post', async () => {
     mockedGetQuestionById.mockResolvedValue(detail({ status: 'ARCHIVED' }))
 
     const wrapper = mountView()
@@ -215,7 +219,22 @@ describe('AdminQuestionDetailView', () => {
     expect(wrapper.text()).not.toContain('Rechazar')
   })
 
-  it('shows reopen action for rejected questions', async () => {
+  it('hides reopen action for archived questions with a linked post', async () => {
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'ARCHIVED',
+        linkedPost: { id: 9, status: 'ARCHIVED', title: 'Publicación archivada' },
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ARCHIVADA')
+    expect(wrapper.text()).not.toContain('Reabrir')
+  })
+
+  it('shows reopen and delete actions for rejected questions without a linked post', async () => {
     mockedGetQuestionById.mockResolvedValue(detail({ status: 'REJECTED' }))
 
     const wrapper = mountView()
@@ -223,6 +242,46 @@ describe('AdminQuestionDetailView', () => {
 
     expect(wrapper.text()).toContain('RECHAZADA')
     expect(wrapper.text()).toContain('Reabrir')
+    expect(wrapper.text()).toContain('Eliminar definitivamente')
+  })
+
+  it('hides reopen and delete actions for rejected questions with a linked post', async () => {
+    mockedGetQuestionById.mockResolvedValue(
+      detail({
+        status: 'REJECTED',
+        linkedPost: { id: 9, status: 'ARCHIVED', title: 'Publicación archivada' },
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Reabrir')
+    expect(wrapper.text()).not.toContain('Eliminar definitivamente')
+  })
+
+  it('deletes a rejected question after confirmation and navigates to rejected list', async () => {
+    mockedGetQuestionById.mockResolvedValue(detail({ status: 'REJECTED' }))
+    mockedDeleteRejectedQuestion.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Eliminar definitivamente').trigger('click')
+    expect(wrapper.text()).toContain('¿Eliminar esta pregunta definitivamente?')
+    expect(wrapper.text()).toContain('La pregunta y su imagen adjunta, si existe, serán eliminadas.')
+
+    const confirmButton = lastButtonByText(wrapper, 'Eliminar definitivamente')
+    await confirmButton.trigger('click')
+    await confirmButton.trigger('click')
+    await flushPromises()
+
+    expect(mockedDeleteRejectedQuestion).toHaveBeenCalledTimes(1)
+    expect(mockedDeleteRejectedQuestion).toHaveBeenCalledWith(1)
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'admin-questions',
+      query: { estado: 'rechazadas' },
+    })
   })
 
   it('does not show V2A actions for published questions', async () => {
