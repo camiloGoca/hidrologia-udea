@@ -1,5 +1,6 @@
 package edu.udea.hidrologia.shared.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.hamcrest.Matchers.containsString;
@@ -20,12 +21,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.DispatcherType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -182,6 +185,19 @@ class SecurityConfigTest {
                         "https://hidrologia-udea.firebaseapp.com"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Authorization")))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, not("*")));
+    }
+
+    @Test
+    void doesNotConvertErrorDispatchToUnauthorized() throws Exception {
+        mockMvc.perform(get("/error")
+                .with(request -> {
+                    request.setDispatcherType(DispatcherType.ERROR);
+                    return request;
+                }))
+                .andExpect(result -> assertThat(result.getResponse().getStatus())
+                        .isNotEqualTo(HttpStatus.UNAUTHORIZED.value()))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .doesNotContain("Authentication is required"));
     }
 
     @Test

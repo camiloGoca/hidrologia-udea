@@ -30,6 +30,7 @@ import edu.udea.hidrologia.post.service.AdminPostImageService;
 import edu.udea.hidrologia.post.service.PostStateConflictException;
 import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
+import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.InvalidImageException;
 
 class AdminPostImageControllerTest {
@@ -125,6 +126,19 @@ class AdminPostImageControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(adminPostImageService).delete(9L, 15L);
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenImageStorageDeleteFails() throws Exception {
+        Mockito.doThrow(new ImageStorageException(
+                "Image storage is temporarily unavailable",
+                new RuntimeException("Request forbidden due to missing permissions")))
+                .when(adminPostImageService)
+                .delete(9L, 15L);
+
+        mockMvc.perform(delete("/api/v1/admin/posts/9/images/15"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message", is("Image uploads are temporarily unavailable")));
     }
 
     @Test

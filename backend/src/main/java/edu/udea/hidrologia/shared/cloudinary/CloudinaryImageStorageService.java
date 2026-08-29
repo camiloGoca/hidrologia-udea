@@ -57,7 +57,7 @@ public class CloudinaryImageStorageService implements ImageStorageService {
                     intValue(result, "width"),
                     intValue(result, "height"),
                     longValue(result, "bytes"));
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             throw new ImageStorageException("Image storage is temporarily unavailable", exception);
         }
     }
@@ -78,7 +78,7 @@ public class CloudinaryImageStorageService implements ImageStorageService {
             throw new ImageStorageException(
                     "Image storage deletion could not be verified",
                     new IllegalStateException("Unexpected Cloudinary deletion result"));
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             throw new ImageStorageException("Image storage is temporarily unavailable", exception);
         }
     }

@@ -33,6 +33,7 @@ import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
 import edu.udea.hidrologia.question.service.StudentQuestionService;
 import edu.udea.hidrologia.shared.error.GlobalExceptionHandler;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
+import edu.udea.hidrologia.shared.storage.ImageStorageException;
 import edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException;
 import edu.udea.hidrologia.shared.storage.ImageTooLargeException;
 import edu.udea.hidrologia.shared.turnstile.TurnstileChallengeException;
@@ -195,6 +196,26 @@ class StudentQuestionControllerTest {
     void returnsServiceUnavailableWhenImageStorageIsDisabled() throws Exception {
         when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), any(MultipartFile.class)))
                 .thenThrow(new ImageStorageUnavailableException("Image uploads are temporarily unavailable"));
+
+        mockMvc.perform(multipart("/api/v1/questions")
+                .file(dataPart("""
+                        {
+                          "sectionSlug": "taller-1",
+                          "question": "Pregunta de prueba",
+                          "turnstileToken": "valid-token"
+                        }
+                        """))
+                .file(new MockMultipartFile("image", "image.png", "image/png", new byte[] {1, 2, 3})))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message", is("Image uploads are temporarily unavailable")));
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenImageStorageRuntimeFailureIsTranslated() throws Exception {
+        when(studentQuestionService.createQuestion(any(CreateStudentQuestionRequest.class), any(MultipartFile.class)))
+                .thenThrow(new ImageStorageException(
+                        "Image storage is temporarily unavailable",
+                        new RuntimeException("Request forbidden due to missing permissions")));
 
         mockMvc.perform(multipart("/api/v1/questions")
                 .file(dataPart("""

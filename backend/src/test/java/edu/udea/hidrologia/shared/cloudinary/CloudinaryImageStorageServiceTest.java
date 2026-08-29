@@ -128,6 +128,18 @@ class CloudinaryImageStorageServiceTest {
     }
 
     @Test
+    void translatesRuntimeFailuresDuringUpload() throws Exception {
+        when(cloudinary.uploader()).thenReturn(uploader);
+        when(uploader.upload(any(), anyMap()))
+                .thenThrow(new RuntimeException("Request forbidden due to missing permissions"));
+
+        assertThatThrownBy(() -> service.upload(new ImageUpload(new byte[] {1, 2, 3}, "png", 2, 2, 3)))
+                .isInstanceOf(ImageStorageException.class)
+                .hasMessage("Image storage is temporarily unavailable")
+                .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void deletesImageByPublicId() throws Exception {
         when(cloudinary.uploader()).thenReturn(uploader);
         when(uploader.destroy("hidrologia-udea/questions/question-1", Map.of(
@@ -154,5 +166,17 @@ class CloudinaryImageStorageServiceTest {
         ImageDeletionResult result = service.delete("hidrologia-udea/posts/9/missing");
 
         assertThat(result).isEqualTo(ImageDeletionResult.NOT_FOUND);
+    }
+
+    @Test
+    void translatesRuntimeFailuresDuringDelete() throws Exception {
+        when(cloudinary.uploader()).thenReturn(uploader);
+        when(uploader.destroy(any(), anyMap()))
+                .thenThrow(new RuntimeException("Request forbidden due to missing permissions"));
+
+        assertThatThrownBy(() -> service.delete("hidrologia-udea/posts/9/post-9-image"))
+                .isInstanceOf(ImageStorageException.class)
+                .hasMessage("Image storage is temporarily unavailable")
+                .hasCauseInstanceOf(RuntimeException.class);
     }
 }
