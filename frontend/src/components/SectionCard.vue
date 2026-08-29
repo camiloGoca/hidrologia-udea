@@ -34,7 +34,12 @@ const tones = [
 ]
 
 const tone = computed(() => tones[(props.position - 1) % tones.length] ?? defaultTone)
-const isWorkshop = computed(() => props.section.type === 'TALLER')
+const iconPosition = computed(() => ((props.position - 1) % 3) + 1)
+const fallbackDescription = computed(() =>
+  props.section.type === 'PARCIAL'
+    ? 'Consulta las publicaciones asociadas a este parcial.'
+    : 'Las publicaciones asociadas se mostrarán en una etapa posterior.',
+)
 const cardStyle = computed(() => ({
   '--card-from': tone.value.from,
   '--card-to': tone.value.to,
@@ -70,7 +75,7 @@ const cardStyle = computed(() => ({
 
       <span class="mt-6 grid min-h-24 place-items-center sm:mt-7 sm:min-h-28" aria-hidden="true">
         <svg
-          v-if="isWorkshop && position === 1"
+          v-if="iconPosition === 1"
           class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
           viewBox="0 0 220 140"
           fill="none"
@@ -85,7 +90,7 @@ const cardStyle = computed(() => ({
         </svg>
 
         <svg
-          v-else-if="isWorkshop && position === 2"
+          v-else-if="iconPosition === 2"
           class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
           viewBox="0 0 220 140"
           fill="none"
@@ -104,7 +109,7 @@ const cardStyle = computed(() => ({
         </svg>
 
         <svg
-          v-else-if="isWorkshop"
+          v-else
           class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
           viewBox="0 0 220 140"
           fill="none"
@@ -120,60 +125,6 @@ const cardStyle = computed(() => ({
           <path d="M130 58H147" />
           <path d="M166 38H184" />
         </svg>
-
-        <svg
-          v-else-if="position === 1"
-          class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
-          viewBox="0 0 220 140"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M56 24H160L180 44V118H56V24Z" />
-          <path d="M160 24V46H180" />
-          <path d="M78 66H142" />
-          <path d="M78 88H160" />
-          <path d="M78 110H124" />
-        </svg>
-
-        <svg
-          v-else-if="position === 2"
-          class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
-          viewBox="0 0 220 140"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M34 112H190" />
-          <path d="M46 102V78" />
-          <path d="M78 102V54" />
-          <path d="M110 102V70" />
-          <path d="M142 102V42" />
-          <path d="M58 36H166" />
-          <path d="M166 36L154 24" />
-          <path d="M166 36L154 48" />
-        </svg>
-
-        <svg
-          v-else
-          class="h-24 w-full max-w-44 sm:h-28 sm:max-w-52"
-          viewBox="0 0 220 140"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M30 112H190" />
-          <path d="M38 104C64 78 88 86 110 66C132 46 154 48 184 28" />
-          <path d="M72 98A10 10 0 1 0 72 78A10 10 0 0 0 72 98Z" />
-          <path d="M128 74A10 10 0 1 0 128 54A10 10 0 0 0 128 74Z" />
-          <path d="M176 40A10 10 0 1 0 176 20A10 10 0 0 0 176 40Z" />
-        </svg>
       </span>
 
       <span class="mt-5 block sm:mt-6">
@@ -182,7 +133,7 @@ const cardStyle = computed(() => ({
           {{ section.description }}
         </span>
         <span v-else class="mt-3 block leading-7 text-white/75 sm:mt-4">
-          Las publicaciones asociadas se mostrarán en una etapa posterior.
+          {{ fallbackDescription }}
         </span>
       </span>
 
