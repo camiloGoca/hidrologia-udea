@@ -293,4 +293,113 @@ describe('PostContentRenderer', () => {
     expect(wrapper.text()).toContain('Imagen no disponible')
     expect(wrapper.find('img').exists()).toBe(false)
   })
+
+  it('renders YouTube video nodes through the official embed URL', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'video',
+              attrs: {
+                provider: 'youtube',
+                sourceUrl: 'https://www.youtube.com/watch?v=abc_DEF1234',
+                videoId: 'abc_DEF1234',
+              },
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    const iframe = wrapper.get('iframe')
+
+    expect(iframe.attributes('src')).toBe('https://www.youtube.com/embed/abc_DEF1234')
+    expect(iframe.attributes('title')).toBe('Video de YouTube')
+    expect(iframe.attributes('loading')).toBe('lazy')
+    expect(iframe.attributes('allowfullscreen')).toBe('')
+    expect(iframe.attributes('allow')).toContain('picture-in-picture')
+    expect(wrapper.html()).not.toContain('watch?v=')
+    expect(wrapper.html()).not.toContain('autoplay')
+  })
+
+  it('renders TikTok video nodes through the player URL', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'video',
+              attrs: {
+                provider: 'tiktok',
+                sourceUrl: 'https://www.tiktok.com/@udea/video/1234567890',
+                videoId: '1234567890',
+              },
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    const iframe = wrapper.get('iframe')
+
+    expect(iframe.attributes('src')).toBe('https://www.tiktok.com/player/v1/1234567890')
+    expect(iframe.attributes('title')).toBe('Video de TikTok')
+    expect(iframe.attributes('loading')).toBe('lazy')
+    expect(wrapper.html()).not.toContain('autoplay')
+  })
+
+  it('renders direct HTTPS videos with controls and no autoplay', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'video',
+              attrs: {
+                provider: 'direct',
+                sourceUrl: 'https://cdn.example.edu/videos/caudal.webm',
+                videoId: null,
+              },
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    const video = wrapper.get('video')
+
+    expect(video.attributes('src')).toBe('https://cdn.example.edu/videos/caudal.webm')
+    expect(video.attributes('controls')).toBe('')
+    expect(video.attributes('preload')).toBe('metadata')
+    expect(video.attributes('playsinline')).toBe('true')
+    expect(wrapper.html()).not.toContain('autoplay')
+  })
+
+  it('does not create arbitrary iframes for malformed video nodes', () => {
+    const wrapper = mount(PostContentRenderer, {
+      props: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'video',
+              attrs: {
+                provider: 'youtube',
+                sourceUrl: 'https://youtube.com.evil.example/watch?v=abc_DEF1234',
+                videoId: '<script>',
+              },
+            },
+          ],
+        } satisfies PostContentDocument,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Video no disponible')
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('youtube.com.evil')
+  })
 })

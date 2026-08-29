@@ -42,6 +42,7 @@ describe('AcademicPostEditor', () => {
     expect(wrapper.text()).toContain('Alineación')
     expect(wrapper.text()).toContain('Enlace')
     expect(wrapper.text()).toContain('Insertar imagen')
+    expect(wrapper.text()).toContain('Video')
     expect(wrapper.text()).toContain('Deshacer')
     expect(wrapper.text()).toContain('Rehacer')
   })
@@ -296,6 +297,93 @@ describe('AcademicPostEditor', () => {
         },
       ],
     })
+
+    wrapper.unmount()
+  })
+
+  it('keeps the link button for normal links without converting videos automatically', async () => {
+    const wrapper = mount(AcademicPostEditor, {
+      props: {
+        id: 'post-content',
+        modelValue: textDocument('Video'),
+      },
+    })
+    const component = wrapper.vm as unknown as { openLinkForm: () => Promise<void> }
+    const editor = getWrapperEditor(wrapper.vm)
+
+    if (!editor) {
+      throw new Error('AcademicPostEditor did not expose the Tiptap editor in this test.')
+    }
+
+    editor.commands.setTextSelection({ from: 1, to: 6 })
+    await component.openLinkForm()
+    await wrapper.get('#post-content-link').setValue('https://www.youtube.com/watch?v=abc_DEF1234')
+    await wrapper.get('[aria-label="Editar enlace"] button').trigger('click')
+
+    const document = editor.getJSON() as PostContentDocument
+
+    expect(JSON.stringify(document)).toContain('"type":"link"')
+    expect(JSON.stringify(document)).not.toContain('"type":"video"')
+
+    wrapper.unmount()
+  })
+
+  it('inserts supported video URLs as block nodes', async () => {
+    for (const [url, provider, videoId] of [
+      ['https://www.youtube.com/watch?v=abc_DEF1234', 'youtube', 'abc_DEF1234'],
+      ['https://youtu.be/abc_DEF1234', 'youtube', 'abc_DEF1234'],
+      ['https://www.youtube.com/shorts/abc_DEF1234', 'youtube', 'abc_DEF1234'],
+      ['https://www.tiktok.com/@udea/video/1234567890', 'tiktok', '1234567890'],
+      ['https://cdn.example.edu/video.mp4', 'direct', null],
+      ['https://cdn.example.edu/video.webm', 'direct', null],
+    ] as const) {
+      const wrapper = mount(AcademicPostEditor, {
+        props: {
+          id: 'post-content',
+          modelValue: emptyPostContentDocument(),
+        },
+      })
+      const component = wrapper.vm as unknown as { openVideoDialog: () => Promise<void> }
+
+      await component.openVideoDialog()
+      await wrapper.get('#post-content-video-url').setValue(url)
+      await wrapper.get('[aria-labelledby="post-content-video-title"] .editor-button-primary').trigger('click')
+      await flushPromises()
+
+      const updates = wrapper.emitted('update:modelValue') ?? []
+      const lastUpdate = updates[updates.length - 1]?.[0] as PostContentDocument
+
+      expect(lastUpdate.content?.[0]).toMatchObject({
+        type: 'video',
+        attrs: { provider, sourceUrl: url, videoId },
+      })
+      expect(JSON.stringify(lastUpdate)).not.toContain('<iframe')
+
+      wrapper.unmount()
+    }
+  })
+
+  it('shows clear validation errors for unsupported videos', async () => {
+    const wrapper = mount(AcademicPostEditor, {
+      props: {
+        id: 'post-content',
+        modelValue: emptyPostContentDocument(),
+      },
+    })
+    const component = wrapper.vm as unknown as { openVideoDialog: () => Promise<void> }
+
+    await component.openVideoDialog()
+    await wrapper.get('#post-content-video-url').setValue('https://vm.tiktok.com/ZM123/')
+    await wrapper.get('[aria-labelledby="post-content-video-title"] .editor-button-primary').trigger('click')
+
+    expect(wrapper.text()).toContain('Usa el enlace completo del video de TikTok.')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await wrapper.get('#post-content-video-url').setValue('javascript:alert(1)')
+    await wrapper.get('[aria-labelledby="post-content-video-title"] .editor-button-primary').trigger('click')
+
+    expect(wrapper.text()).toContain('Usa un enlace de YouTube, TikTok o un archivo HTTPS .mp4/.webm.')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
 
     wrapper.unmount()
   })

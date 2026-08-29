@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
 
@@ -34,6 +34,14 @@ import { adminPostStatusLabel } from '@/utils/adminPostStatus'
 import { extractPostContentText, samePostContent } from '@/utils/postContent'
 
 type ConfirmationAction = 'discard' | 'publish' | 'archive' | 'restore' | 'deletePermanent'
+interface PostSaveSnapshot {
+  title: string
+  contentDocument: PostContentDocument
+  sectionSlug: string
+  tagIds: number[]
+}
+
+const AUTOSAVE_DELAY_MS = 1500
 
 const route = useRoute()
 const router = useRouter()
@@ -45,6 +53,7 @@ const hasError = ref(false)
 const pendingAction = ref<ConfirmationAction | null>(null)
 const isSubmittingAction = ref(false)
 const isSaving = ref(false)
+const isAutosavePending = ref(false)
 const deletingUnusedImageId = ref<number | null>(null)
 const actionError = ref(false)
 const saveError = ref(false)
@@ -55,6 +64,8 @@ const isPreviewOpen = ref(false)
 const cancelButton = ref<HTMLButtonElement | null>(null)
 const previewCloseButton = ref<HTMLButtonElement | null>(null)
 let lastFocusedElement: HTMLElement | null = null
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+let isSyncingForm = false
 const form = reactive({
   title: '',
   contentDocument: emptyPostContentDocument(),
@@ -74,7 +85,7 @@ const unusedImages = computed(() =>
   post.value?.images.filter((image) => !referencedImageIds.value.has(image.id)) ?? [],
 )
 const displayNickname = computed(() => sourceQuestion.value?.nickname ?? 'Anónimo')
-const displayTitle = computed(() => post.value?.title.trim() || 'Sin título')
+const displayTitle = computed(() => form.title.trim() || 'Sin título')
 const workshopSections = computed(() => sectionsByType('TALLER'))
 const examSections = computed(() => sectionsByType('PARCIAL'))
 const selectedSection = computed(
@@ -86,6 +97,7 @@ const selectedTags = computed(() =>
 const isDraft = computed(() => post.value?.status === 'DRAFT')
 const isPublished = computed(() => post.value?.status === 'PUBLISHED')
 const isArchived = computed(() => post.value?.status === 'ARCHIVED')
+const isAutosaveEnabled = computed(() => isDraft.value || isArchived.value)
 const isBusy = computed(() => isSaving.value || isSubmittingAction.value || deletingUnusedImageId.value !== null)
 const isDirty = computed(
   () =>
@@ -97,12 +109,19 @@ const isDirty = computed(
 const hasRequiredPublishedContent = computed(
   () => form.title.trim().length > 0 && extractPostContentText(form.contentDocument).length > 0,
 )
+const canAutosaveCurrentForm = computed(
+  () =>
+    Boolean(post.value) &&
+    isAutosaveEnabled.value &&
+    isDirty.value &&
+    (isDraft.value || hasRequiredPublishedContent.value),
+)
 const canSave = computed(() => {
-  if (!post.value || !isDirty.value || isBusy.value) {
+  if (!post.value || !isPublished.value || !isDirty.value || isBusy.value) {
     return false
   }
 
-  return isDraft.value || hasRequiredPublishedContent.value
+  return hasRequiredPublishedContent.value
 })
 const canPublish = computed(
   () => isDraft.value && !isDirty.value && hasRequiredPublishedContent.value && !isBusy.value,
@@ -113,6 +132,25 @@ const canRestore = computed(
 )
 const saveButtonLabel = computed(() => (isDraft.value ? 'Guardar borrador' : 'Guardar cambios'))
 const savingLabel = computed(() => (isDraft.value ? 'Guardando...' : 'Actualizando...'))
+const autosaveStatusMessage = computed(() => {
+  if (!isAutosaveEnabled.value) {
+    return ''
+  }
+  if (successMessage.value) {
+    return ''
+  }
+  if (isSaving.value) {
+    return 'Guardando...'
+  }
+  if (saveError.value) {
+    return 'No se pudo guardar'
+  }
+  if (isDirty.value || isAutosavePending.value) {
+    return 'Cambios sin guardar'
+  }
+
+  return 'Guardado'
+})
 const statusHelpMessage = computed(() => {
   if (isDirty.value) {
     if (isPublished.value) {
@@ -185,6 +223,25 @@ const confirmationConfig = computed(() => {
 
 void loadPost()
 
+watch(
+  () => [
+    form.title,
+    JSON.stringify(form.contentDocument),
+    form.sectionSlug,
+    JSON.stringify(sortedIds(form.tagIds)),
+    post.value?.status,
+  ],
+  () => {
+    if (!isSyncingForm) {
+      scheduleAutosave()
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  clearAutosaveTimer()
+})
+
 async function loadPost() {
   const id = Number(route.params.id)
 
@@ -222,27 +279,95 @@ async function savePost() {
     return
   }
 
+  clearAutosaveTimer()
+  await persistSnapshot(snapshotForm(), 'Publicación actualizada.')
+}
+
+async function persistSnapshot(snapshot: PostSaveSnapshot, message: string) {
+  if (!post.value || isSaving.value) {
+    return
+  }
+
   isSaving.value = true
+  isAutosavePending.value = false
   saveError.value = false
   successMessage.value = ''
 
   try {
     const updatedPost = await updateAdminPost(post.value.id, {
-      title: form.title,
-      contentDocument: form.contentDocument,
-      sectionSlug: form.sectionSlug,
-      tagIds: [...form.tagIds],
+      title: snapshot.title,
+      contentDocument: snapshot.contentDocument,
+      sectionSlug: snapshot.sectionSlug,
+      tagIds: [...snapshot.tagIds],
     })
-    post.value = updatedPost
-    syncForm(updatedPost)
-    successMessage.value = isDraft.value ? 'Borrador guardado.' : 'Publicación actualizada.'
+    if (sameSnapshot(snapshotForm(), snapshot)) {
+      post.value = updatedPost
+      syncForm(updatedPost)
+      successMessage.value = message
+    } else {
+      post.value = updatedPost
+      syncSaved(updatedPost)
+    }
   } catch (error) {
     await handleError(error, () => {
       saveError.value = true
     })
   } finally {
     isSaving.value = false
+    if (isAutosaveEnabled.value && isDirty.value && !saveError.value) {
+      scheduleAutosave()
+    }
   }
+}
+
+function scheduleAutosave() {
+  if (!isAutosaveEnabled.value) {
+    clearAutosaveTimer()
+    return
+  }
+
+  if (!isDirty.value) {
+    clearAutosaveTimer()
+    saveError.value = false
+    return
+  }
+
+  if (!canAutosaveCurrentForm.value) {
+    clearAutosaveTimer()
+    return
+  }
+
+  clearAutosaveTimer()
+  successMessage.value = ''
+  saveError.value = false
+  isAutosavePending.value = true
+  autosaveTimer = setTimeout(() => {
+    void runAutosave()
+  }, AUTOSAVE_DELAY_MS)
+}
+
+async function runAutosave() {
+  if (!canAutosaveCurrentForm.value) {
+    isAutosavePending.value = false
+    return
+  }
+
+  if (isSaving.value) {
+    scheduleAutosave()
+    return
+  }
+
+  await persistSnapshot(snapshotForm(), 'Guardado')
+}
+
+async function retryAutosave() {
+  if (!canAutosaveCurrentForm.value) {
+    return
+  }
+
+  clearAutosaveTimer()
+  saveError.value = false
+  await runAutosave()
 }
 
 async function uploadEditorImage(file: File, altText: string): Promise<AdminPostImage> {
@@ -447,14 +572,52 @@ async function handleError(error: unknown, fallback: () => void) {
 }
 
 function syncForm(currentPost: AdminPost) {
-  form.title = currentPost.title
-  form.contentDocument = cloneContent(currentPost.contentDocument)
-  form.sectionSlug = currentPost.section.slug
-  form.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
+  isSyncingForm = true
+  try {
+    form.title = currentPost.title
+    form.contentDocument = cloneContent(currentPost.contentDocument)
+    form.sectionSlug = currentPost.section.slug
+    form.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
+    syncSaved(currentPost)
+    clearAutosaveTimer()
+    saveError.value = false
+    isAutosavePending.value = false
+  } finally {
+    isSyncingForm = false
+  }
+}
+
+function syncSaved(currentPost: AdminPost) {
   saved.title = currentPost.title
   saved.contentDocument = cloneContent(currentPost.contentDocument)
   saved.sectionSlug = currentPost.section.slug
   saved.tagIds = sortedIds(currentPost.tags.map((tag) => tag.id))
+}
+
+function snapshotForm(): PostSaveSnapshot {
+  return {
+    title: form.title,
+    contentDocument: cloneContent(form.contentDocument),
+    sectionSlug: form.sectionSlug,
+    tagIds: sortedIds(form.tagIds),
+  }
+}
+
+function sameSnapshot(left: PostSaveSnapshot, right: PostSaveSnapshot) {
+  return (
+    left.title === right.title &&
+    samePostContent(left.contentDocument, right.contentDocument) &&
+    left.sectionSlug === right.sectionSlug &&
+    sameIds(left.tagIds, right.tagIds)
+  )
+}
+
+function clearAutosaveTimer() {
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer)
+    autosaveTimer = null
+  }
+  isAutosavePending.value = false
 }
 
 function upsertImage(images: AdminPostImage[], image: AdminPostImage) {
@@ -622,8 +785,24 @@ function unusedImageDeleteMessage(error: unknown): string {
             Los cambios guardados se reflejarán inmediatamente en la publicación pública.
           </p>
 
+          <div
+            v-if="autosaveStatusMessage"
+            class="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700"
+            role="status"
+          >
+            <span>{{ autosaveStatusMessage }}</span>
+            <button
+              v-if="saveError"
+              type="button"
+              class="rounded-full bg-sky-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950 disabled:cursor-not-allowed disabled:bg-slate-400"
+              :disabled="isBusy || !canAutosaveCurrentForm"
+              @click="retryAutosave"
+            >
+              Reintentar
+            </button>
+          </div>
           <p
-            v-if="isDirty"
+            v-else-if="isDirty"
             class="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
             role="status"
           >
@@ -823,6 +1002,7 @@ function unusedImageDeleteMessage(error: unknown): string {
                 Vista previa
               </button>
               <button
+                v-if="isPublished"
                 type="submit"
                 class="rounded-2xl bg-sky-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-sky-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-950 disabled:cursor-not-allowed disabled:bg-slate-400"
                 :disabled="!canSave"

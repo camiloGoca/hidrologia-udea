@@ -4,6 +4,7 @@ export type PostContentHighlightKind = 'note' | 'important'
 export type PostContentTextAlign = 'left' | 'center' | 'right' | 'justify'
 export type PostContentAcademicBlockKind = 'note' | 'example' | 'important'
 export type PostContentImageDisplaySize = 'small' | 'medium' | 'large'
+export type PostContentVideoProvider = 'youtube' | 'tiktok' | 'direct'
 
 export type PostContentMarkType =
   | 'bold'
@@ -40,6 +41,7 @@ export type PostContentNodeType =
   | 'hardBreak'
   | 'academicBlock'
   | 'image'
+  | 'video'
 
 export interface PostContentNode {
   type: PostContentNodeType
@@ -53,6 +55,9 @@ export interface PostContentNode {
     postImageId?: number
     caption?: string | null
     displaySize?: PostContentImageDisplaySize
+    provider?: PostContentVideoProvider
+    sourceUrl?: string
+    videoId?: string | null
   }
   marks?: PostContentMark[]
   content?: PostContentNode[]

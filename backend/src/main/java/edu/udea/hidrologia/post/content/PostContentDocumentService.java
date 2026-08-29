@@ -2,6 +2,8 @@ package edu.udea.hidrologia.post.content;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -28,7 +30,8 @@ public class PostContentDocumentService {
             "listItem",
             "blockquote",
             "academicBlock",
-            "image");
+            "image",
+            "video");
     private static final Set<String> INLINE_NODES = Set.of("text", "hardBreak");
     private static final Set<String> MARKS = Set.of(
             "bold",
@@ -45,6 +48,10 @@ public class PostContentDocumentService {
     private static final Set<String> HIGHLIGHT_KINDS = Set.of("note", "important");
     private static final Set<String> ACADEMIC_BLOCK_KINDS = Set.of("note", "example", "important");
     private static final Set<String> IMAGE_DISPLAY_SIZES = Set.of("small", "medium", "large");
+    private static final Set<String> VIDEO_PROVIDERS = Set.of("youtube", "tiktok", "direct");
+    private static final Set<String> YOUTUBE_HOSTS = Set.of("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be");
+    private static final Set<String> TIKTOK_HOSTS = Set.of("tiktok.com", "www.tiktok.com", "m.tiktok.com");
+    private static final int VIDEO_SOURCE_URL_MAX_LENGTH = 2048;
     private static final int IMAGE_CAPTION_MAX_LENGTH = 240;
 
     private final JsonMapper jsonMapper;
@@ -214,6 +221,9 @@ public class PostContentDocumentService {
         } else if ("image".equals(type)) {
             validateOnlyFields(node, Set.of("type", "attrs"));
             validateImageAttrs(node.get("attrs"));
+        } else if ("video".equals(type)) {
+            validateOnlyFields(node, Set.of("type", "attrs"));
+            validateVideoAttrs(node.get("attrs"));
         } else {
             validateOnlyFields(node, Set.of("type", "attrs", "content"));
             validateNoAttrs(node.get("attrs"));
@@ -349,6 +359,28 @@ public class PostContentDocumentService {
         }
     }
 
+    private void validateVideoAttrs(JsonNode attrs) {
+        if (attrs == null || !attrs.isObject()) {
+            throw invalid();
+        }
+        validateOnlyFields(attrs, Set.of("provider", "sourceUrl", "videoId"));
+
+        String provider = textValue(attrs.get("provider"));
+        String sourceUrl = textValue(attrs.get("sourceUrl"));
+        if (provider == null || !VIDEO_PROVIDERS.contains(provider)
+                || sourceUrl == null || sourceUrl.isBlank() || sourceUrl.strip().length() > VIDEO_SOURCE_URL_MAX_LENGTH) {
+            throw invalid();
+        }
+
+        URI uri = parseHttpsUri(sourceUrl.strip());
+        switch (provider) {
+            case "youtube" -> validateYoutubeVideo(attrs, uri);
+            case "tiktok" -> validateTiktokVideo(attrs, uri);
+            case "direct" -> validateDirectVideo(attrs, uri);
+            default -> throw invalid();
+        }
+    }
+
     private void validateLinkAttrs(JsonNode attrs) {
         if (attrs == null || !attrs.isObject()) {
             throw invalid();
@@ -454,6 +486,9 @@ public class PostContentDocumentService {
             }
             return;
         }
+        if ("video".equals(type)) {
+            return;
+        }
         if ("hardBreak".equals(type)) {
             text.append('\n');
             return;
@@ -486,6 +521,145 @@ public class PostContentDocumentService {
         } catch (URISyntaxException exception) {
             return false;
         }
+    }
+
+    private void validateYoutubeVideo(JsonNode attrs, URI uri) {
+        String host = normalizedHost(uri);
+        if (!YOUTUBE_HOSTS.contains(host)) {
+            throw invalid();
+        }
+
+        String videoId = textValue(attrs.get("videoId"));
+        if (!isYoutubeVideoId(videoId) || !videoId.equals(extractYoutubeVideoId(uri))) {
+            throw invalid();
+        }
+    }
+
+    private void validateTiktokVideo(JsonNode attrs, URI uri) {
+        String host = normalizedHost(uri);
+        if (!TIKTOK_HOSTS.contains(host)) {
+            throw invalid();
+        }
+
+        String videoId = textValue(attrs.get("videoId"));
+        if (!isTiktokVideoId(videoId) || !videoId.equals(extractTiktokVideoId(uri))) {
+            throw invalid();
+        }
+    }
+
+    private void validateDirectVideo(JsonNode attrs, URI uri) {
+        JsonNode videoId = attrs.get("videoId");
+        if (videoId != null && !videoId.isNull()) {
+            throw invalid();
+        }
+
+        String path = uri.getPath();
+        if (path == null) {
+            throw invalid();
+        }
+
+        String lowerPath = path.toLowerCase();
+        if (!lowerPath.endsWith(".mp4") && !lowerPath.endsWith(".webm")) {
+            throw invalid();
+        }
+    }
+
+    private URI parseHttpsUri(String value) {
+        try {
+            URI uri = new URI(value);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || normalizedHost(uri).isBlank()) {
+                throw invalid();
+            }
+
+            return uri;
+        } catch (URISyntaxException exception) {
+            throw invalid();
+        }
+    }
+
+    private String normalizedHost(URI uri) {
+        String host = uri.getHost();
+
+        return host == null ? "" : host.toLowerCase();
+    }
+
+    private String extractYoutubeVideoId(URI uri) {
+        String host = normalizedHost(uri);
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        if ("youtu.be".equals(host)) {
+            return firstPathSegment(path);
+        }
+        if ("/watch".equals(path)) {
+            return queryParam(uri, "v");
+        }
+        if (path.startsWith("/shorts/")) {
+            return pathSegment(path, 1);
+        }
+        if (path.startsWith("/embed/")) {
+            return pathSegment(path, 1);
+        }
+
+        return null;
+    }
+
+    private String extractTiktokVideoId(URI uri) {
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        String[] segments = pathSegments(path);
+        if (segments.length == 3 && segments[0].startsWith("@") && "video".equals(segments[1])) {
+            return segments[2];
+        }
+
+        if (segments.length == 3 && "player".equals(segments[0]) && "v1".equals(segments[1])) {
+            return segments[2];
+        }
+
+        return null;
+    }
+
+    private String firstPathSegment(String path) {
+        return pathSegment(path, 0);
+    }
+
+    private String pathSegment(String path, int index) {
+        String[] segments = pathSegments(path);
+
+        return index >= 0 && index < segments.length ? segments[index] : null;
+    }
+
+    private String[] pathSegments(String path) {
+        return path == null ? new String[0] : path.replaceFirst("^/+", "").split("/");
+    }
+
+    private String queryParam(URI uri, String name) {
+        String query = uri.getRawQuery();
+        if (query == null) {
+            return null;
+        }
+
+        for (String pair : query.split("&")) {
+            String[] parts = pair.split("=", 2);
+            if (decode(parts[0]).equals(name)) {
+                return parts.length > 1 ? decode(parts[1]) : "";
+            }
+        }
+
+        return null;
+    }
+
+    private String decode(String value) {
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            throw invalid();
+        }
+    }
+
+    private boolean isYoutubeVideoId(String value) {
+        return value != null && value.matches("[A-Za-z0-9_-]{6,64}");
+    }
+
+    private boolean isTiktokVideoId(String value) {
+        return value != null && value.matches("\\d{5,30}");
     }
 
     private boolean referencesPostImageIdValue(Object value, Long postImageId) {
@@ -619,6 +793,21 @@ public class PostContentDocumentService {
                 if (!normalizedCaption.isBlank()) {
                     result.put("caption", normalizedCaption);
                 }
+            }
+
+            return result;
+        }
+
+        if ("video".equals(type)) {
+            ObjectNode result = JsonNodeFactory.instance.objectNode();
+            String provider = attrs.get("provider").asText();
+            result.put("provider", provider);
+            result.put("sourceUrl", attrs.get("sourceUrl").asText().strip());
+            JsonNode videoId = attrs.get("videoId");
+            if ("direct".equals(provider)) {
+                result.set("videoId", JsonNodeFactory.instance.nullNode());
+            } else {
+                result.put("videoId", videoId.asText());
             }
 
             return result;
