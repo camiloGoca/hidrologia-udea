@@ -3,6 +3,7 @@ package edu.udea.hidrologia.question.entity;
 import java.time.Instant;
 
 import edu.udea.hidrologia.section.entity.Section;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -44,7 +45,7 @@ public class StudentQuestion {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @OneToOne(mappedBy = "question", fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "question", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     private QuestionAttachment attachment;
 
     protected StudentQuestion() {
