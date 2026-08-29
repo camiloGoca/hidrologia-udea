@@ -1,5 +1,5 @@
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
@@ -87,6 +87,10 @@ const mockedIsAdminAuthorizationError = vi.mocked(isAdminAuthorizationError)
 const mockedSignOut = vi.mocked(signOut)
 
 describe('AdminPostEditorView', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     routeParams.id = '9'
     routerPush.mockReset()
@@ -344,7 +348,8 @@ describe('AdminPostEditorView', () => {
     expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
   })
 
-  it('tracks dirty state and saves a draft manually', async () => {
+  it('autosaves draft changes after the debounce delay', async () => {
+    vi.useFakeTimers()
     mockedGetAdminPost.mockResolvedValue(adminPost())
     mockedUpdateAdminPost.mockResolvedValue(
       adminPost({
@@ -365,8 +370,11 @@ describe('AdminPostEditorView', () => {
     expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Guarda los cambios antes de publicar.')
 
-    await wrapper.find('form').trigger('submit')
+    await vi.advanceTimersByTimeAsync(1499)
     await flushPromises()
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
+
+    await advanceAutosave()
 
     expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título guardado',
@@ -374,11 +382,12 @@ describe('AdminPostEditorView', () => {
       sectionSlug: 'parcial-1',
       tagIds: [],
     })
-    expect(wrapper.text()).toContain('Borrador guardado.')
+    expect(wrapper.text()).toContain('Guardado')
     expect(wrapper.text()).not.toContain('Cambios sin guardar')
   })
 
-  it('renders assigned tags as selected and saves tagIds with the post', async () => {
+  it('renders assigned tags as selected and autosaves tagIds with the post', async () => {
+    vi.useFakeTimers()
     mockedGetAdminPost.mockResolvedValue(
       adminPost({
         title: 'Título',
@@ -406,8 +415,7 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).toContain('Cambios sin guardar')
     expect(buttonByText(wrapper, 'Publicar').attributes('disabled')).toBeDefined()
 
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
+    await advanceAutosave()
 
     expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
       title: 'Título',
@@ -416,6 +424,107 @@ describe('AdminPostEditorView', () => {
       tagIds: [1, 2],
     })
     expect(wrapper.text()).not.toContain('Cambios sin guardar')
+  })
+
+  it('debounces multiple draft edits into one final autosave', async () => {
+    vi.useFakeTimers()
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Inicial', content: 'Uno' }))
+    mockedUpdateAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Final',
+        content: 'Tres',
+        section: sections()[1],
+      }),
+    )
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('Intermedio')
+    await vi.advanceTimersByTimeAsync(700)
+    await wrapper.find('input').setValue('Final')
+    await vi.advanceTimersByTimeAsync(700)
+    await wrapper.find('textarea').setValue('Tres')
+    await wrapper.find('select').setValue('parcial-1')
+
+    await vi.advanceTimersByTimeAsync(1499)
+    await flushPromises()
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
+
+    await advanceAutosave()
+
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(1)
+    expect(mockedUpdateAdminPost).toHaveBeenCalledWith(9, {
+      title: 'Final',
+      contentDocument: contentDocument('Tres'),
+      sectionSlug: 'parcial-1',
+      tagIds: [],
+    })
+  })
+
+  it('does not start concurrent autosaves for the same draft', async () => {
+    vi.useFakeTimers()
+    const firstSave = deferred<AdminPost>()
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Inicial', content: 'Uno' }))
+    mockedUpdateAdminPost
+      .mockReturnValueOnce(firstSave.promise)
+      .mockResolvedValueOnce(adminPost({ title: 'B', content: 'Dos' }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('A')
+    await advanceAutosave()
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('Guardando...')
+
+    await wrapper.find('input').setValue('B')
+    await wrapper.find('textarea').setValue('Dos')
+    await advanceAutosave()
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(1)
+
+    firstSave.resolve(adminPost({ title: 'A', content: 'Uno' }))
+    await flushPromises()
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('B')
+
+    await advanceAutosave()
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(2)
+    expect(mockedUpdateAdminPost).toHaveBeenLastCalledWith(9, {
+      title: 'B',
+      contentDocument: contentDocument('Dos'),
+      sectionSlug: 'taller-1',
+      tagIds: [],
+    })
+  })
+
+  it('keeps newer draft edits visible when an older autosave response arrives', async () => {
+    vi.useFakeTimers()
+    const firstSave = deferred<AdminPost>()
+    mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Inicial', content: 'Uno' }))
+    mockedUpdateAdminPost
+      .mockReturnValueOnce(firstSave.promise)
+      .mockResolvedValueOnce(adminPost({ title: 'B', content: 'Dos' }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('input').setValue('A')
+    await advanceAutosave()
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('input').setValue('B')
+    await wrapper.find('textarea').setValue('Dos')
+    firstSave.resolve(adminPost({ title: 'A', content: 'Uno' }))
+    await flushPromises()
+
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('B')
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe('Dos')
+    expect(wrapper.text()).toContain('Cambios sin guardar')
+
+    await advanceAutosave()
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Guardado')
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('B')
   })
 
   it('blocks archive and restore while tag changes are dirty', async () => {
@@ -519,6 +628,7 @@ describe('AdminPostEditorView', () => {
   })
 
   it('edits a published post and keeps public actions blocked while dirty', async () => {
+    vi.useFakeTimers()
     mockedGetAdminPost.mockResolvedValue(
       adminPost({
         title: 'Título publicado',
@@ -548,6 +658,10 @@ describe('AdminPostEditorView', () => {
     await wrapper.find('input').setValue('Título actualizado')
     expect(buttonByText(wrapper, 'Archivar publicación').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Guarda los cambios antes de archivar.')
+
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+    expect(mockedUpdateAdminPost).not.toHaveBeenCalled()
 
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -606,7 +720,8 @@ describe('AdminPostEditorView', () => {
     expect(wrapper.text()).not.toContain('Ver publicación pública')
   })
 
-  it('edits and restores an archived post after saving changes', async () => {
+  it('autosaves archived post changes before restore', async () => {
+    vi.useFakeTimers()
     mockedGetAdminPost.mockResolvedValue(
       adminPost({ title: 'Título', content: 'Contenido', status: 'ARCHIVED', publishedAt: '2026-01-02T00:00:00Z' }),
     )
@@ -638,10 +753,9 @@ describe('AdminPostEditorView', () => {
     expect(buttonByText(wrapper, 'Restaurar publicación').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Guarda los cambios antes de restaurar.')
 
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
+    await advanceAutosave()
 
-    expect(wrapper.text()).toContain('Publicación actualizada.')
+    expect(wrapper.text()).toContain('Guardado')
     await buttonByText(wrapper, 'Restaurar publicación').trigger('click')
     expect(wrapper.text()).toContain('¿Restaurar esta publicación?')
     await lastButtonByText(wrapper, 'Restaurar publicación').trigger('click')
@@ -760,20 +874,30 @@ describe('AdminPostEditorView', () => {
   })
 
   it('renders a friendly save error without technical details', async () => {
+    vi.useFakeTimers()
     mockedGetAdminPost.mockResolvedValue(adminPost({ title: 'Título', content: 'Contenido' }))
-    mockedUpdateAdminPost.mockRejectedValue(new Error('SQL detail'))
+    mockedUpdateAdminPost
+      .mockRejectedValueOnce(new Error('SQL detail'))
+      .mockResolvedValueOnce(adminPost({ title: 'Título cambiado', content: 'Contenido' }))
 
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('input').setValue('Título cambiado')
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
+    await advanceAutosave()
 
+    expect(wrapper.text()).toContain('No se pudo guardar')
     expect(wrapper.text()).toContain('No pudimos guardar los cambios.')
     expect(wrapper.text()).not.toContain('SQL detail')
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('Título cambiado')
     expect(mockedSignOut).not.toHaveBeenCalled()
     expect(routerPush).not.toHaveBeenCalled()
+
+    await buttonByText(wrapper, 'Reintentar').trigger('click')
+    await flushPromises()
+
+    expect(mockedUpdateAdminPost).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Guardado')
   })
 
   it('renders a friendly action error without technical details', async () => {
@@ -884,6 +1008,22 @@ function lastButtonByText(wrapper: ReturnType<typeof mountView>, text: string) {
   }
 
   return button
+}
+
+async function advanceAutosave() {
+  await vi.advanceTimersByTimeAsync(1500)
+  await flushPromises()
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+
+  return { promise, resolve, reject }
 }
 
 function adminPost(overrides: Partial<AdminPost> = {}): AdminPost {

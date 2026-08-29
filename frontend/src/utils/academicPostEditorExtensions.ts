@@ -6,6 +6,7 @@ import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import type { Component } from 'vue'
 
 import AcademicImageNodeView from '@/components/AcademicImageNodeView.vue'
+import AcademicVideoNodeView from '@/components/AcademicVideoNodeView.vue'
 import type {
   PostContentAcademicBlockKind,
   PostContentHighlightKind,
@@ -13,6 +14,7 @@ import type {
   PostContentTextAlign,
   PostContentTextColor,
   PostContentTextSize,
+  PostContentVideoProvider,
 } from '@/types/postContent'
 
 export interface AcademicEditorImageMetadata {
@@ -54,6 +56,13 @@ declare module '@tiptap/core' {
         postImageId: number
         caption?: string | null
         displaySize?: PostContentImageDisplaySize
+      }) => ReturnType
+    }
+    video: {
+      insertVideo: (attrs: {
+        provider: PostContentVideoProvider
+        sourceUrl: string
+        videoId: string | null
       }) => ReturnType
     }
   }
@@ -302,6 +311,63 @@ const PostImageNode = Node.create<AcademicEditorOptions>({
   },
 })
 
+const VideoNode = Node.create({
+  name: 'video',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      provider: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-video-provider'),
+        renderHTML: (attributes) => ({ 'data-video-provider': attributes.provider }),
+      },
+      sourceUrl: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-video-source-url'),
+        renderHTML: (attributes) => ({ 'data-video-source-url': attributes.sourceUrl }),
+      },
+      videoId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-video-id'),
+        renderHTML: (attributes) =>
+          attributes.videoId ? { 'data-video-id': String(attributes.videoId) } : {},
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'figure[data-video-provider]' }]
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['figure', mergeAttributes(HTMLAttributes)]
+  },
+
+  addCommands() {
+    return {
+      insertVideo:
+        (attrs) =>
+        ({ commands }) =>
+          commands.insertContent({
+            type: this.name,
+            attrs: {
+              provider: attrs.provider,
+              sourceUrl: attrs.sourceUrl,
+              videoId: attrs.videoId,
+            },
+          }),
+    }
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(AcademicVideoNodeView as Component)
+  },
+})
+
 export function createAcademicPostEditorExtensions(options: AcademicEditorOptions = {}): Extensions {
   return [
     StarterKit.configure({
@@ -323,6 +389,7 @@ export function createAcademicPostEditorExtensions(options: AcademicEditorOption
     AcademicTextHighlight,
     AcademicBlock,
     PostImageNode.configure(options),
+    VideoNode,
     Underline,
     Link.configure({
       openOnClick: false,

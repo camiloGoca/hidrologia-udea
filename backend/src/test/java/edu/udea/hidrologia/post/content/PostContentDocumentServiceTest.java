@@ -454,6 +454,179 @@ class PostContentDocumentServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void acceptsAndCanonicalizesVideoNodes() throws Exception {
+        Map<String, Object> youtube = videoDocument("""
+                "provider": "youtube",
+                "sourceUrl": "  https://www.youtube.com/watch?v=abc_DEF1234  ",
+                "videoId": "abc_DEF1234"
+                """);
+        Map<String, Object> tiktok = videoDocument("""
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@udea/video/1234567890123456789",
+                "videoId": "1234567890123456789"
+                """);
+        Map<String, Object> direct = videoDocument("""
+                "provider": "direct",
+                "sourceUrl": "https://cdn.example.edu/videos/caudal.mp4",
+                "videoId": null
+                """);
+
+        Map<String, Object> validatedYoutube = service.validate(youtube);
+        Map<String, Object> validatedTiktok = service.validate(tiktok);
+        Map<String, Object> validatedDirect = service.validate(direct);
+
+        assertThat(videoAttrs(validatedYoutube)).containsOnly(
+                Map.entry("provider", "youtube"),
+                Map.entry("sourceUrl", "https://www.youtube.com/watch?v=abc_DEF1234"),
+                Map.entry("videoId", "abc_DEF1234"));
+        assertThat(videoAttrs(validatedTiktok)).containsOnly(
+                Map.entry("provider", "tiktok"),
+                Map.entry("sourceUrl", "https://www.tiktok.com/@udea/video/1234567890123456789"),
+                Map.entry("videoId", "1234567890123456789"));
+        assertThat(videoAttrs(validatedDirect))
+                .containsEntry("provider", "direct")
+                .containsEntry("sourceUrl", "https://cdn.example.edu/videos/caudal.mp4")
+                .containsEntry("videoId", null)
+                .hasSize(3);
+        assertThat(service.extractPlainText(youtube)).isEmpty();
+    }
+
+    @Test
+    void acceptsCommonYoutubeUrlShapes() throws Exception {
+        for (String attrs : List.of(
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://youtu.be/abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/shorts/abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/embed/abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """)) {
+            assertThat(service.validate(videoDocument(attrs))).containsEntry("type", "doc");
+        }
+    }
+
+    @Test
+    void acceptsDirectWebmVideo() throws Exception {
+        Map<String, Object> document = videoDocument("""
+                "provider": "direct",
+                "sourceUrl": "https://cdn.example.edu/videos/caudal.webm"
+                """);
+
+        assertThat(videoAttrs(service.validate(document))).containsEntry("videoId", null);
+    }
+
+    @Test
+    void rejectsInvalidVideoNodes() throws Exception {
+        for (String attrs : List.of(
+                """
+                "provider": "vimeo",
+                "sourceUrl": "https://vimeo.com/123456",
+                "videoId": "123456"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://youtube.com.evil.example/watch?v=abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "http://www.youtube.com/watch?v=abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/watch?v=abc_DEF1234",
+                "videoId": "different1"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@udea/video/1234567890",
+                "videoId": "not-numeric"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/cualquier-cosa/video/123456789",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/video/123456789",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@usuario/otro/123456789",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/@usuario/video/123456789/extra",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "tiktok",
+                "sourceUrl": "https://www.tiktok.com/player/v1/123456789/extra",
+                "videoId": "123456789"
+                """,
+                """
+                "provider": "direct",
+                "sourceUrl": "https://example.edu/video-page"
+                """,
+                """
+                "provider": "direct",
+                "sourceUrl": "https://example.edu/video.mp4",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "direct",
+                "sourceUrl": "blob:https://example.edu/video.mp4"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/watch?v=abc_DEF1234",
+                "videoId": "abc_DEF1234",
+                "iframe": "<iframe></iframe>"
+                """)) {
+            Map<String, Object> document = videoDocument(attrs);
+
+            assertThatThrownBy(() -> service.validate(document))
+                    .isInstanceOf(InvalidPostContentDocumentException.class);
+        }
+    }
+
+    @Test
+    void rejectsContentInsideVideoNode() throws Exception {
+        Map<String, Object> document = json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "video",
+                      "attrs": {
+                        "provider": "youtube",
+                        "sourceUrl": "https://www.youtube.com/watch?v=abc_DEF1234",
+                        "videoId": "abc_DEF1234"
+                      },
+                      "content": [{ "type": "text", "text": "No permitido" }]
+                    }
+                  ]
+                }
+                """);
+
+        assertThatThrownBy(() -> service.validate(document))
+                .isInstanceOf(InvalidPostContentDocumentException.class);
+    }
+
+    @Test
     void rejectsImageWithoutPositiveIntegralPostImageId() throws Exception {
         for (String attrs : List.of(
                 """
@@ -681,6 +854,20 @@ class PostContentDocumentServiceTest {
                 """.formatted(attrs));
     }
 
+    private Map<String, Object> videoDocument(String attrs) throws Exception {
+        return json("""
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "video",
+                      "attrs": { %s }
+                    }
+                  ]
+                }
+                """.formatted(attrs));
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> linkAttrs(Map<String, Object> document) {
         return markAttrs(document);
@@ -693,5 +880,12 @@ class PostContentDocumentServiceTest {
         List<Map<String, Object>> marks = (List<Map<String, Object>>) paragraphContent.get(0).get("marks");
 
         return (Map<String, Object>) marks.get(0).get("attrs");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> videoAttrs(Map<String, Object> document) {
+        List<Map<String, Object>> content = (List<Map<String, Object>>) document.get("content");
+
+        return (Map<String, Object>) content.get(0).get("attrs");
     }
 }

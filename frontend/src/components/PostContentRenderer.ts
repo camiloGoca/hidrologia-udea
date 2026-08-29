@@ -12,6 +12,7 @@ import type {
   PostContentTextSize,
 } from '@/types/postContent'
 import type { PostImage } from '@/types/post'
+import { isDirectVideoSource, tiktokEmbedUrl, youtubeEmbedUrl } from '@/utils/videoEmbeds'
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 const TEXT_ALIGN_CLASSES: Record<PostContentTextAlign, string> = {
@@ -107,6 +108,8 @@ function renderNode(node: PostContentNode, index: number, images: Map<number, Po
       return renderAcademicBlock(node, key, children)
     case 'image':
       return renderImage(node, key, images)
+    case 'video':
+      return renderVideo(node, key)
     case 'text':
       return renderText(node, key)
     case 'hardBreak':
@@ -157,6 +160,83 @@ function renderImage(node: PostContentNode, key: string, images: Map<number, Pos
         ? h('figcaption', { class: 'px-3 py-3 text-center text-sm font-bold leading-6 text-slate-600' }, caption)
         : null,
     ],
+  )
+}
+
+function renderVideo(node: PostContentNode, key: string): VNode {
+  const provider = node.attrs?.provider
+  if (provider === 'youtube') {
+    const src = youtubeEmbedUrl(node.attrs?.videoId)
+    if (!src) {
+      return renderUnavailableVideo(key)
+    }
+
+    return h(
+      'figure',
+      { key, class: 'overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-sm' },
+      [
+        h('iframe', {
+          src,
+          title: 'Video de YouTube',
+          class: 'aspect-video w-full',
+          loading: 'lazy',
+          allow: 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+          allowfullscreen: true,
+        }),
+      ],
+    )
+  }
+
+  if (provider === 'tiktok') {
+    const src = tiktokEmbedUrl(node.attrs?.videoId)
+    if (!src) {
+      return renderUnavailableVideo(key)
+    }
+
+    return h(
+      'figure',
+      { key, class: 'mx-auto overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-sm sm:max-w-sm' },
+      [
+        h('iframe', {
+          src,
+          title: 'Video de TikTok',
+          class: 'aspect-[9/16] w-full',
+          loading: 'lazy',
+          allow: 'encrypted-media; picture-in-picture',
+          allowfullscreen: true,
+        }),
+      ],
+    )
+  }
+
+  if (provider === 'direct' && isDirectVideoSource(node.attrs?.sourceUrl)) {
+    return h(
+      'figure',
+      { key, class: 'overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 p-2 shadow-sm' },
+      [
+        h('video', {
+          src: node.attrs?.sourceUrl,
+          class: 'h-auto w-full rounded-2xl',
+          controls: true,
+          preload: 'metadata',
+          playsinline: true,
+        }),
+      ],
+    )
+  }
+
+  return renderUnavailableVideo(key)
+}
+
+function renderUnavailableVideo(key: string): VNode {
+  return h(
+    'figure',
+    {
+      key,
+      class:
+        'rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-bold text-slate-500',
+    },
+    'Video no disponible',
   )
 }
 

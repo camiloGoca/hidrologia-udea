@@ -12,9 +12,11 @@ import type {
   PostContentTextAlign,
   PostContentTextColor,
   PostContentTextSize,
+  PostContentVideoProvider,
 } from '@/types/postContent'
 import { emptyPostContentDocument } from '@/types/postContent'
 import { createAcademicPostEditorExtensions } from '@/utils/academicPostEditorExtensions'
+import { parseVideoUrl } from '@/utils/videoEmbeds'
 
 type BlockOption = 'paragraph' | 'heading2' | 'heading3'
 type HighlightOption = 'none' | PostContentHighlightKind
@@ -40,6 +42,10 @@ const isLinkFormOpen = ref(false)
 const linkHref = ref('')
 const linkError = ref('')
 const linkInput = ref<HTMLInputElement | null>(null)
+const isVideoDialogOpen = ref(false)
+const videoUrl = ref('')
+const videoError = ref('')
+const videoInput = ref<HTMLInputElement | null>(null)
 const isImageDialogOpen = ref(false)
 const imageDialogMode = ref<ImageDialogMode>('insert')
 const imageFile = ref<File | null>(null)
@@ -51,6 +57,7 @@ const isImageSubmitting = ref(false)
 const imageFileInput = ref<HTMLInputElement | null>(null)
 const imageAltInput = ref<HTMLInputElement | null>(null)
 let savedImageSelection: { from: number; to: number } | null = null
+let savedVideoSelection: { from: number; to: number } | null = null
 let selectedImagePosition: number | null = null
 let selectedImageId: number | null = null
 let isApplyingExternalContent = false
@@ -262,6 +269,56 @@ function removeLink() {
   closeLinkForm()
 }
 
+async function openVideoDialog() {
+  if (!editor.value) {
+    return
+  }
+
+  savedVideoSelection = {
+    from: editor.value.state.selection.from,
+    to: editor.value.state.selection.to,
+  }
+  videoUrl.value = ''
+  videoError.value = ''
+  isVideoDialogOpen.value = true
+  await nextTick()
+  videoInput.value?.focus()
+}
+
+function closeVideoDialog() {
+  isVideoDialogOpen.value = false
+  videoError.value = ''
+  videoUrl.value = ''
+}
+
+function submitVideoDialog() {
+  if (!editor.value) {
+    return
+  }
+
+  const parsed = parseVideoUrl(videoUrl.value)
+  if (!parsed.ok) {
+    videoError.value = parsed.error.message
+    return
+  }
+
+  const chain = restoreSavedVideoSelection()
+  const inserted = chain
+    ?.insertVideo({
+      provider: parsed.value.provider as PostContentVideoProvider,
+      sourceUrl: parsed.value.sourceUrl,
+      videoId: parsed.value.videoId,
+    })
+    .run()
+
+  if (!inserted) {
+    videoError.value = 'No pudimos insertar el video. Intenta nuevamente.'
+    return
+  }
+
+  closeVideoDialog()
+}
+
 function clearInlineFormatting() {
   editor.value?.chain().focus().unsetAllMarks().run()
 }
@@ -420,6 +477,19 @@ function restoreSavedImageSelection() {
   const maxPosition = currentEditor.state.doc.content.size
   const from = Math.min(savedImageSelection.from, maxPosition)
   const to = Math.min(savedImageSelection.to, maxPosition)
+
+  return currentEditor.chain().focus().setTextSelection({ from, to })
+}
+
+function restoreSavedVideoSelection() {
+  const currentEditor = editor.value
+  if (!currentEditor || !savedVideoSelection) {
+    return currentEditor?.chain().focus()
+  }
+
+  const maxPosition = currentEditor.state.doc.content.size
+  const from = Math.min(savedVideoSelection.from, maxPosition)
+  const to = Math.min(savedVideoSelection.to, maxPosition)
 
   return currentEditor.chain().focus().setTextSelection({ from, to })
 }
@@ -727,6 +797,17 @@ function isSafeLink(href: string): boolean {
             </button>
             <button
               type="button"
+              class="editor-button"
+              :aria-pressed="isVideoDialogOpen"
+              :disabled="!editor"
+              title="Insertar video"
+              @mousedown.prevent="openVideoDialog"
+              @click="openVideoDialog"
+            >
+              Video
+            </button>
+            <button
+              type="button"
               class="editor-button editor-button-icon"
               :disabled="!editor"
               title="Deshacer"
@@ -779,6 +860,48 @@ function isSafeLink(href: string): boolean {
           Aplicar
         </button>
         <button type="button" class="editor-button" @click="removeLink">Quitar enlace</button>
+      </div>
+
+      <div
+        v-if="isVideoDialogOpen"
+        class="grid gap-4 rounded-2xl border border-sky-100 bg-white p-4"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="post-content-video-title"
+      >
+        <h3 id="post-content-video-title" class="text-base font-black text-slate-950">
+          Insertar video
+        </h3>
+
+        <div>
+          <label class="editor-label" for="post-content-video-url">URL del video</label>
+          <input
+            id="post-content-video-url"
+            ref="videoInput"
+            v-model="videoUrl"
+            type="text"
+            inputmode="url"
+            class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100"
+            placeholder="https://www.youtube.com/watch?v=..."
+            aria-describedby="post-content-video-help"
+            @keydown.enter.prevent="submitVideoDialog"
+          />
+          <p id="post-content-video-help" class="mt-2 text-xs font-bold text-slate-600">
+            YouTube, TikTok o archivo HTTPS .mp4/.webm. Los enlaces comunes siguen usando el botón Enlace.
+          </p>
+          <p v-if="videoError" class="mt-2 text-sm font-bold text-red-800" role="alert">
+            {{ videoError }}
+          </p>
+        </div>
+
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button type="button" class="editor-button" @click="closeVideoDialog">
+            Cancelar
+          </button>
+          <button type="button" class="editor-button editor-button-primary" @click="submitVideoDialog">
+            Insertar video
+          </button>
+        </div>
       </div>
 
       <div
@@ -1279,5 +1402,52 @@ function isSafeLink(href: string): boolean {
 :deep(.editor-image-edit-button:focus-visible) {
   outline: 2px solid rgb(4 120 87);
   outline-offset: 3px;
+}
+
+:deep(.editor-video-node) {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.5rem auto;
+  max-width: min(100%, 42rem);
+  border-radius: 1.5rem;
+  border: 1px solid rgb(125 211 252);
+  background: linear-gradient(135deg, rgb(240 249 255), rgb(236 253 245));
+  padding: 1rem;
+}
+
+:deep(.editor-video-node-selected) {
+  border-color: rgb(4 120 87);
+  box-shadow: 0 0 0 4px rgb(167 243 208 / 0.9);
+}
+
+:deep(.editor-video-icon) {
+  display: grid;
+  min-height: 8rem;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgb(15 23 42);
+  color: white;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+:deep(.editor-video-caption) {
+  display: grid;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+:deep(.editor-video-title) {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: rgb(8 47 73);
+}
+
+:deep(.editor-video-source),
+:deep(.editor-video-id) {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: rgb(71 85 105);
 }
 </style>
