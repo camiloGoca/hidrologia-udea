@@ -1,10 +1,15 @@
 import type { NavigationGuardReturn } from 'vue-router'
 import type { User } from 'firebase/auth'
 
+import { isPreviewReadOnlyMode } from '@/config/preview'
 import { getAdminMe } from '@/services/api/adminService'
 import { observeAuthState, signOut } from '@/services/firebase/authService'
 
 export async function requireAdmin(): Promise<NavigationGuardReturn> {
+  if (isPreviewReadOnlyMode()) {
+    return { name: 'admin-preview-unavailable' }
+  }
+
   const user = await waitForAuthState()
 
   if (!user) {

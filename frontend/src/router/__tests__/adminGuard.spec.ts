@@ -19,6 +19,7 @@ const mockedSignOut = vi.mocked(signOut)
 
 describe('adminGuard', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs()
     mockedGetAdminMe.mockReset()
     mockedObserveAuthState.mockReset()
     mockedSignOut.mockReset()
@@ -29,6 +30,14 @@ describe('adminGuard', () => {
     mockAuthState(null)
 
     await expect(requireAdmin()).resolves.toEqual({ name: 'admin-login' })
+    expect(mockedGetAdminMe).not.toHaveBeenCalled()
+  })
+
+  it('redirects to the preview unavailable view without initializing Firebase Auth in preview mode', async () => {
+    vi.stubEnv('VITE_PREVIEW_READ_ONLY', 'true')
+
+    await expect(requireAdmin()).resolves.toEqual({ name: 'admin-preview-unavailable' })
+    expect(mockedObserveAuthState).not.toHaveBeenCalled()
     expect(mockedGetAdminMe).not.toHaveBeenCalled()
   })
 

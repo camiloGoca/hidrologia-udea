@@ -1,5 +1,6 @@
 import { httpClient } from './httpClient'
 
+import { isPreviewReadOnlyMode } from '@/config/preview'
 import type { AnalyticsSessionRequest, PublicVisitCount } from '@/types/analytics'
 
 const ANALYTICS_SESSION_KEY = 'hidrologia-udea.analytics.sessionId'
@@ -17,14 +18,26 @@ export function getOrCreateAnalyticsSessionId(): string {
 }
 
 export async function recordSiteVisit(): Promise<void> {
+  if (isPreviewReadOnlyMode()) {
+    return
+  }
+
   await httpClient.post('/analytics/visit', sessionPayload())
 }
 
 export async function recordSectionView(slug: string): Promise<void> {
+  if (isPreviewReadOnlyMode()) {
+    return
+  }
+
   await httpClient.post(`/analytics/sections/${slug}/view`, sessionPayload())
 }
 
 export async function recordPostView(postId: number | string): Promise<void> {
+  if (isPreviewReadOnlyMode()) {
+    return
+  }
+
   await httpClient.post(`/analytics/posts/${postId}/view`, sessionPayload())
 }
 

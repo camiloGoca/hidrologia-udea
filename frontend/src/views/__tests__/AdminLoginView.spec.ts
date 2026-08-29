@@ -32,6 +32,7 @@ function mountView() {
 
 describe('AdminLoginView', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs()
     routeState.query = {}
     routerPush.mockReset()
     mockedSignIn.mockReset()
@@ -53,6 +54,16 @@ describe('AdminLoginView', () => {
     expect(mockedSignIn).toHaveBeenCalledWith('profesor@example.com', 'secret')
     expect(mockedGetAdminMe).toHaveBeenCalled()
     expect(routerPush).toHaveBeenCalledWith({ name: 'admin-home' })
+  })
+
+  it('disables admin login in preview read-only mode', async () => {
+    vi.stubEnv('VITE_PREVIEW_READ_ONLY', 'true')
+    const wrapper = mountView()
+
+    expect(wrapper.text()).toContain('Panel no disponible')
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(mockedSignIn).not.toHaveBeenCalled()
+    expect(mockedGetAdminMe).not.toHaveBeenCalled()
   })
 
   it('shows a generic error when credentials fail', async () => {

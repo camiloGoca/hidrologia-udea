@@ -25,6 +25,7 @@ const sessionId = '11111111-1111-4111-8111-111111111111'
 describe('analyticsService', () => {
   beforeEach(() => {
     sessionStorage.clear()
+    vi.unstubAllEnvs()
     mockedGet.mockReset()
     mockedPost.mockReset()
     mockedPost.mockResolvedValue({ data: undefined } as AxiosResponse<void>)
@@ -51,6 +52,16 @@ describe('analyticsService', () => {
     expect(mockedPost).toHaveBeenNthCalledWith(1, '/analytics/visit', { sessionId })
     expect(mockedPost).toHaveBeenNthCalledWith(2, '/analytics/sections/taller-1/view', { sessionId })
     expect(mockedPost).toHaveBeenNthCalledWith(3, '/analytics/posts/10/view', { sessionId })
+  })
+
+  it('does not write analytics in preview read-only mode', async () => {
+    vi.stubEnv('VITE_PREVIEW_READ_ONLY', 'true')
+
+    await recordSiteVisit()
+    await recordSectionView('taller-1')
+    await recordPostView(10)
+
+    expect(mockedPost).not.toHaveBeenCalled()
   })
 
   it('loads the public visit count', async () => {

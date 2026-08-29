@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -73,7 +74,8 @@ import edu.udea.hidrologia.tag.dto.TagResponse;
 
 @SpringBootTest(properties = {
         "hidrologia.firebase.admin-uid=admin-uid",
-        "hidrologia.cors.allowed-origins=https://hidrologia-udea.web.app,https://hidrologia-udea.firebaseapp.com"
+        "hidrologia.cors.allowed-origins=https://hidrologia-udea.web.app,https://hidrologia-udea.firebaseapp.com",
+        "hidrologia.cors.preview-origin-pattern=https://hidrologia-udea--*.web.app"
 })
 @AutoConfigureMockMvc
 class SecurityConfigTest {
@@ -172,6 +174,104 @@ class SecurityConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString("POST")))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Content-Type")))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+    }
+
+    @Test
+    void keepsProductionFirebaseappOriginAllowed() throws Exception {
+        when(interestingLinkService.findActiveLinks()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.firebaseapp.com"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea.firebaseapp.com"));
+    }
+
+    @Test
+    void keepsProductionMutatingCorsRequestsAllowed() throws Exception {
+        mockMvc.perform(post("/api/v1/analytics/visit")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.web.app")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionJson()))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea.web.app"));
+    }
+
+    @Test
+    void allowsReadOnlyPreviewOriginForPublicGetRequests() throws Exception {
+        when(analyticsService.countSiteVisits()).thenReturn(7L);
+
+        mockMvc.perform(get("/api/v1/analytics/visits/count")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea--pr-12-abcd.web.app"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea--pr-12-abcd.web.app"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, not("*")));
+    }
+
+    @Test
+    void allowsPreviewPreflightOnlyForGetRequests() throws Exception {
+        mockMvc.perform(options("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea--pr-12-abcd.web.app")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Accept"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://hidrologia-udea--pr-12-abcd.web.app"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString("GET")))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+    }
+
+    @Test
+    void rejectsPreviewPreflightWithAuthorizationHeader() throws Exception {
+        mockMvc.perform(options("/api/v1/admin/me")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea--pr-12-abcd.web.app")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void rejectsPreviewMutatingRequestsServerSide() throws Exception {
+        String previewOrigin = "https://hidrologia-udea--pr-12-abcd.web.app";
+
+        mockMvc.perform(post("/api/v1/analytics/visit")
+                .header(HttpHeaders.ORIGIN, previewOrigin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionJson()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/v1/analytics/visit")
+                .header(HttpHeaders.ORIGIN, previewOrigin))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/v1/analytics/visit")
+                .header(HttpHeaders.ORIGIN, previewOrigin))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/analytics/visit")
+                .header(HttpHeaders.ORIGIN, previewOrigin))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectsOriginsOutsideHidrologiaFirebasePreviewSite() throws Exception {
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://otro-proyecto--pr-12.web.app"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "https://hidrologia-udea.web.app.evil.com"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+
+        mockMvc.perform(get("/api/v1/links")
+                .header(HttpHeaders.ORIGIN, "http://hidrologia-udea--pr-12.web.app"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test

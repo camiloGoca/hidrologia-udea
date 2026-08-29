@@ -16,6 +16,7 @@ import AdminPostsView from '@/views/admin/AdminPostsView.vue'
 import AdminHashtagsView from '@/views/admin/AdminHashtagsView.vue'
 import AdminLinksView from '@/views/admin/AdminLinksView.vue'
 import AdminLoginView from '@/views/admin/AdminLoginView.vue'
+import AdminPreviewUnavailableView from '@/views/admin/AdminPreviewUnavailableView.vue'
 import AdminAnalyticsView from '@/views/admin/AdminAnalyticsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ParcialesView from '@/views/sections/ParcialesView.vue'
@@ -88,6 +89,11 @@ const router = createRouter({
       path: '/admin/login',
       name: 'admin-login',
       component: AdminLoginView,
+    },
+    {
+      path: '/admin/unavailable',
+      name: 'admin-preview-unavailable',
+      component: AdminPreviewUnavailableView,
     },
     {
       path: '/admin',

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import loginImageUrl from '@/assets/images/login.jpg'
+import { isPreviewReadOnlyMode } from '@/config/preview'
 import { getAdminMe } from '@/services/api/adminService'
 import { signIn, signOut } from '@/services/firebase/authService'
 
@@ -14,11 +15,16 @@ const password = ref('')
 const showPassword = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
+const previewReadOnly = isPreviewReadOnlyMode()
 
 const isForbiddenRedirect = computed(() => route.query.reason === 'forbidden')
 const passwordInputType = computed(() => (showPassword.value ? 'text' : 'password'))
 
 async function submitLogin() {
+  if (previewReadOnly) {
+    return
+  }
+
   if (isSubmitting.value) {
     return
   }
@@ -66,7 +72,27 @@ async function submitLogin() {
           </p>
         </div>
 
+        <section
+          v-if="previewReadOnly"
+          class="rounded-[2rem] bg-white/96 p-6 text-slate-950 shadow-2xl ring-1 ring-white/40 backdrop-blur sm:p-8"
+          aria-label="Panel administrativo no disponible"
+        >
+          <p class="text-sm font-black uppercase text-emerald-700">Vista previa</p>
+          <h2 class="mt-2 text-3xl font-black">Panel no disponible</h2>
+          <p class="mt-3 text-sm leading-6 text-slate-600">
+            Los previews de Pull Request son de solo lectura. El login administrativo permanece
+            deshabilitado para proteger producción.
+          </p>
+          <RouterLink
+            :to="{ name: 'home' }"
+            class="mt-7 inline-flex rounded-2xl bg-emerald-800 px-5 py-3 text-base font-black text-white shadow-lg transition hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800"
+          >
+            Volver al inicio
+          </RouterLink>
+        </section>
+
         <form
+          v-else
           class="rounded-[2rem] bg-white/96 p-6 text-slate-950 shadow-2xl ring-1 ring-white/40 backdrop-blur sm:p-8"
           aria-label="Iniciar sesión como administrador"
           @submit.prevent="submitLogin"

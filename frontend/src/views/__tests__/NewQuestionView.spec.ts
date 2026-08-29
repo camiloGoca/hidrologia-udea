@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQuestion } from '@/services/api/questionService'
 import { getSections } from '@/services/api/sectionService'
@@ -91,6 +91,7 @@ async function mountLoadedView() {
 
 describe('NewQuestionView', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs()
     turnstileConfig.siteKey = ''
     mockedGetSections.mockReset()
     mockedCreateQuestion.mockReset()
@@ -106,6 +107,10 @@ describe('NewQuestionView', () => {
       status: 'PENDING',
       createdAt: '2026-01-01T00:00:00Z',
     })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('shows loading while sections are requested', () => {
@@ -266,6 +271,20 @@ describe('NewQuestionView', () => {
 
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     expect(mockedCreateQuestion).not.toHaveBeenCalled()
+  })
+
+  it('disables submission and does not mount Turnstile in preview read-only mode', async () => {
+    vi.stubEnv('VITE_PREVIEW_READ_ONLY', 'true')
+    turnstileConfig.siteKey = 'test-site-key'
+    const wrapper = await mountLoadedView()
+
+    expect(wrapper.text()).toContain('No disponible en la vista previa.')
+    expect(wrapper.find('[data-testid="turnstile-widget"]').exists()).toBe(false)
+
+    await wrapper.get('form').trigger('submit')
+
+    expect(mockedCreateQuestion).not.toHaveBeenCalled()
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 
   it('sends the Turnstile token when the challenge is completed', async () => {

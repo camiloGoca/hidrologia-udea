@@ -81,6 +81,79 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  deploy-preview-frontend:
+    name: Deploy Preview Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend, frontend]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_PREVIEW_READ_ONLY: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build read-only preview frontend
+        run: npm run build
+
+      - name: Deploy Firebase Hosting preview
+        working-directory: .
+        env:
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HIDROLOGIA_UDEA }}
+        run: |
+          set -euo pipefail
+
+          credentials_file="$(mktemp)"
+          response_file="$(mktemp)"
+          trap 'rm -f "${credentials_file}" "${response_file}"' EXIT
+
+          printf '%s' "${FIREBASE_SERVICE_ACCOUNT}" > "${credentials_file}"
+          export GOOGLE_APPLICATION_CREDENTIALS="${credentials_file}"
+
+          channel_id="pr-${{ github.event.pull_request.number }}"
+
+          npx --yes firebase-tools@15.22.1 hosting:channel:deploy "${channel_id}" \
+            --expires 7d \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --no-authorized-domains \
+            --non-interactive \
+            --json > "${response_file}"
+
+          preview_url="$(jq -r '.result | to_entries | map(.value.url) | first // empty' "${response_file}")"
+          expire_time="$(jq -r '.result | to_entries | map(.value.expireTime) | first // empty' "${response_file}")"
+
+          if [[ -z "${preview_url}" || "${preview_url}" == "null" ]]; then
+            echo "Firebase Hosting preview deploy did not return a preview URL."
+            exit 1
+          fi
+
+          {
+            echo "### Firebase Hosting Preview"
+            echo
+            echo "- URL: ${preview_url}"
+            echo "- Expires: ${expire_time}"
+            echo "- Mode: read-only"
+            echo "- Auth domains sync: disabled"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest

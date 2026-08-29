@@ -223,6 +223,10 @@ CORS:
 - si no hay origins configurados, el backend no abre CORS globalmente;
 - permite solo métodos y headers necesarios para la SPA y el panel admin;
 - no permite credenciales porque la autenticación admin viaja por `Authorization: Bearer`.
+- los previews de Firebase Hosting pueden habilitarse de forma separada con `CORS_PREVIEW_ORIGIN_PATTERN`;
+- los origins preview aceptados deben pertenecer al sitio `hidrologia-udea--*.web.app`;
+- los previews solo permiten CORS de lectura (`GET`, `HEAD`, `OPTIONS`) y no permiten `Authorization`;
+- además, el backend rechaza métodos mutantes cuando el `Origin` corresponde a un preview, para evitar writes simples desde navegador.
 
 Firebase:
 
@@ -388,7 +392,28 @@ El perfil `prod`:
 - expone Actuator `health` sin detalles;
 - evita incluir stack traces, exception class y binding internals en respuestas de error estándar.
 
-## 15. Testing
+## 15. CI/CD y previews
+
+GitHub Actions ejecuta CI para backend y frontend en Pull Requests y pushes a `main`.
+
+En `main`, después de CI verde:
+
+- Firebase Hosting despliega el frontend live;
+- Northflank construye y despliega el backend para el `github.sha` exacto.
+
+En Pull Requests internos del mismo repositorio:
+
+- se despliega un Firebase Hosting Preview Channel temporal;
+- el build usa `VITE_PREVIEW_READ_ONLY=true`;
+- el preview apunta al backend real de producción solo para lecturas públicas;
+- no despliega backend ni llama Northflank;
+- no habilita admin, envío de preguntas, Turnstile ni escrituras de analytics;
+- el deploy preview usa Firebase CLI con `--no-authorized-domains` para no agregar dominios dinámicos a Firebase Authentication;
+- los previews expiran automáticamente.
+
+Los Pull Requests desde forks ejecutan CI normal, pero no crean preview y no reciben secretos de despliegue.
+
+## 16. Testing
 
 Backend:
 
@@ -405,7 +430,7 @@ Frontend:
 - mocks de servicios API/Firebase;
 - tests sin backend real.
 
-## 16. Gaps preproducción
+## 17. Gaps preproducción
 
 Riesgo principal pendiente:
 

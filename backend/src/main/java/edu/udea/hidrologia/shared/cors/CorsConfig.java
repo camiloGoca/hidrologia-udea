@@ -9,7 +9,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
@@ -17,24 +16,43 @@ public class CorsConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of(
+        CorsConfiguration productionConfiguration = new CorsConfiguration();
+        productionConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
+        productionConfiguration.setAllowedMethods(List.of(
                 HttpMethod.GET.name(),
                 HttpMethod.POST.name(),
                 HttpMethod.PUT.name(),
                 HttpMethod.PATCH.name(),
                 HttpMethod.DELETE.name(),
                 HttpMethod.OPTIONS.name()));
-        configuration.setAllowedHeaders(List.of(
+        productionConfiguration.setAllowedHeaders(List.of(
                 HttpHeaders.AUTHORIZATION,
                 HttpHeaders.CONTENT_TYPE,
                 HttpHeaders.ACCEPT));
-        configuration.setAllowCredentials(false);
+        productionConfiguration.setAllowCredentials(false);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration);
+        CorsConfiguration previewConfiguration = new CorsConfiguration();
+        if (properties.hasPreviewOriginPattern()) {
+            previewConfiguration.setAllowedOriginPatterns(List.of(properties.getPreviewOriginPattern()));
+        }
+        previewConfiguration.setAllowedMethods(List.of(
+                HttpMethod.GET.name(),
+                HttpMethod.HEAD.name(),
+                HttpMethod.OPTIONS.name()));
+        previewConfiguration.setAllowedHeaders(List.of(HttpHeaders.ACCEPT, HttpHeaders.CONTENT_TYPE));
+        previewConfiguration.setAllowCredentials(false);
 
-        return source;
+        return request -> {
+            if (!request.getRequestURI().startsWith(request.getContextPath() + "/api/")) {
+                return null;
+            }
+
+            String origin = request.getHeader(HttpHeaders.ORIGIN);
+            if (properties.isPreviewOrigin(origin)) {
+                return previewConfiguration;
+            }
+
+            return productionConfiguration;
+        };
     }
 }

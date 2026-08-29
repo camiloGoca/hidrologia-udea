@@ -36,6 +36,7 @@ springdoc:
 hidrologia:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+    preview-origin-pattern: ${CORS_PREVIEW_ORIGIN_PATTERN:}
   cloudinary:
     enabled: ${CLOUDINARY_ENABLED:false}
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}

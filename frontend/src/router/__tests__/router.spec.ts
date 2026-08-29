@@ -52,6 +52,12 @@ describe('router', () => {
     ).toBe(true)
     expect(
       routes.some(
+        (route) =>
+          route.path === '/admin/unavailable' && route.name === 'admin-preview-unavailable',
+      ),
+    ).toBe(true)
+    expect(
+      routes.some(
         (route) => route.path === '/admin/estadisticas' && route.name === 'admin-analytics',
       ),
     ).toBe(true)

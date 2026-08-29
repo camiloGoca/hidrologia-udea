@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import PageBanner from '@/components/PageBanner.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import { isPreviewReadOnlyMode } from '@/config/preview'
 import { getTurnstileSiteKey, TURNSTILE_ACTION } from '@/config/turnstile'
 import { createQuestion } from '@/services/api/questionService'
 import { getSections } from '@/services/api/sectionService'
@@ -28,6 +29,7 @@ const turnstileToken = ref('')
 const turnstileError = ref('')
 const submitErrorMessage = ref('Revisa los campos e intenta nuevamente en unos momentos.')
 const turnstileSiteKey = getTurnstileSiteKey()
+const previewReadOnly = isPreviewReadOnlyMode()
 
 const form = reactive({
   nickname: '',
@@ -46,10 +48,15 @@ const talleres = computed(() => sections.value.filter((section) => section.type 
 const parciales = computed(() => sections.value.filter((section) => section.type === 'PARCIAL'))
 const questionLength = computed(() => form.question.length)
 const isSubmitting = computed(() => submitState.value === 'SUBMITTING')
-const isTurnstileEnabled = computed(() => Boolean(turnstileSiteKey))
+const isTurnstileEnabled = computed(() => !previewReadOnly && Boolean(turnstileSiteKey))
 const canSubmit = computed(
-  () => !isSubmitting.value && !isLoadingSections.value && (!isTurnstileEnabled.value || Boolean(turnstileToken.value)),
+  () =>
+    !previewReadOnly &&
+    !isSubmitting.value &&
+    !isLoadingSections.value &&
+    (!isTurnstileEnabled.value || Boolean(turnstileToken.value)),
 )
+const isFormDisabled = computed(() => previewReadOnly || isSubmitting.value)
 const selectedImageSize = computed(() =>
   selectedImage.value ? formatFileSize(selectedImage.value.size) : '',
 )
@@ -72,6 +79,10 @@ async function loadSections() {
 }
 
 async function submitQuestion() {
+  if (previewReadOnly) {
+    return
+  }
+
   if (isSubmitting.value) {
     return
   }
@@ -297,7 +308,18 @@ function formatFileSize(size: number) {
         </div>
 
         <div
-          v-else-if="submitState === 'ERROR'"
+          v-if="previewReadOnly"
+          class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950"
+          role="status"
+        >
+          <p class="font-black">No disponible en la vista previa.</p>
+          <p class="mt-2 text-sm leading-6">
+            Los previews son de solo lectura y no envían preguntas ni cargan verificaciones externas.
+          </p>
+        </div>
+
+        <div
+          v-if="submitState === 'ERROR'"
           class="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950"
           role="alert"
         >
@@ -320,7 +342,7 @@ function formatFileSize(size: number) {
               :maxlength="NICKNAME_MAX_LENGTH"
               aria-describedby="nickname-help nickname-error"
               class="mt-3 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-sky-800 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="isSubmitting"
+              :disabled="isFormDisabled"
             />
             <p v-if="errors.nickname" id="nickname-error" class="mt-2 text-sm font-bold text-red-800">
               {{ errors.nickname }}
@@ -354,7 +376,7 @@ function formatFileSize(size: number) {
               v-model="form.sectionSlug"
               aria-describedby="section-help section-error"
               class="mt-3 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-sky-800 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="isSubmitting"
+              :disabled="isFormDisabled"
             >
               <option value="">Selecciona una sección</option>
               <optgroup v-if="talleres.length > 0" label="Talleres">
@@ -386,7 +408,7 @@ function formatFileSize(size: number) {
               rows="8"
               aria-describedby="question-error"
               class="mt-3 w-full resize-y rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-sky-800 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="isSubmitting"
+              :disabled="isFormDisabled"
             />
             <p v-if="errors.question" id="question-error" class="mt-2 text-sm font-bold text-red-800">
               {{ errors.question }}
@@ -407,7 +429,7 @@ function formatFileSize(size: number) {
               accept="image/jpeg,image/png"
               aria-describedby="image-help image-error"
               class="mt-3 w-full rounded-2xl border border-dashed border-cyan-200 bg-cyan-50/60 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-sky-950 file:px-4 file:py-2 file:text-sm file:font-black file:text-white hover:border-cyan-400 focus:border-sky-800 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="isSubmitting"
+              :disabled="isFormDisabled"
               @change="handleImageChange"
             />
             <p v-if="errors.image" id="image-error" class="mt-2 text-sm font-bold text-red-800">
@@ -432,7 +454,7 @@ function formatFileSize(size: number) {
                 <button
                   type="button"
                   class="rounded-full border border-slate-300 px-4 py-2 text-sm font-black text-slate-800 transition hover:border-red-300 hover:bg-red-50 hover:text-red-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="isSubmitting"
+                  :disabled="isFormDisabled"
                   @click="removeSelectedImage"
                 >
                   Quitar imagen
