@@ -26,6 +26,8 @@ describe('videoEmbeds', () => {
   it('rejects unsupported YouTube Live URL shapes', () => {
     for (const url of [
       'https://www.youtube.com/live/',
+      'https://www.youtube.com/live//rui5xgyketg',
+      'https://www.youtube.com/live/rui5xgyketg/',
       'https://www.youtube.com/live/rui5xgyketg/extra',
       'https://youtube.com.evil.example/live/rui5xgyketg',
     ]) {
@@ -94,8 +96,22 @@ describe('videoEmbeds', () => {
       'https://www.tiktok.com/cualquier-cosa/video/123456789',
       'https://www.tiktok.com/video/123456789',
       'https://www.tiktok.com/@usuario/otro/123456789',
+      'https://www.tiktok.com/@usuario//video/123456789',
+      'https://www.tiktok.com/@usuario/video//123456789',
       'https://www.tiktok.com/@usuario/video/123456789/extra',
       'https://www.tiktok.com/player/v1/123456789/extra',
+    ]) {
+      expect(parseVideoUrl(url)).toEqual({
+        ok: false,
+        error: { message: 'Usa un enlace de YouTube, TikTok o un archivo HTTPS .mp4/.webm.' },
+      })
+    }
+  })
+
+  it('rejects YouTube paths with empty internal segments', () => {
+    for (const url of [
+      'https://www.youtube.com/shorts//abc_DEF1234',
+      'https://www.youtube.com/embed//abc_DEF1234',
     ]) {
       expect(parseVideoUrl(url)).toEqual({
         ok: false,
