@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.json.JsonMapper;
 
+import edu.udea.hidrologia.analytics.repository.AnalyticsRepository;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.entity.Post;
@@ -29,6 +30,8 @@ import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
 import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
+import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
+import edu.udea.hidrologia.question.service.QuestionAttachmentCleanupService;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.entity.SectionType;
 import edu.udea.hidrologia.section.repository.SectionRepository;
@@ -54,7 +57,16 @@ class AdminPostPublicationServiceTest {
     private TagRepository tagRepository;
 
     @Mock
+    private StudentQuestionRepository studentQuestionRepository;
+
+    @Mock
+    private AnalyticsRepository analyticsRepository;
+
+    @Mock
     private PostImageCleanupService postImageCleanupService;
+
+    @Mock
+    private QuestionAttachmentCleanupService questionAttachmentCleanupService;
 
     private AdminPostPublicationService publicationService;
 
@@ -65,8 +77,11 @@ class AdminPostPublicationServiceTest {
                 postImageRepository,
                 sectionRepository,
                 tagRepository,
+                studentQuestionRepository,
+                analyticsRepository,
                 new PostContentDocumentService(JsonMapper.builder().build()),
                 postImageCleanupService,
+                questionAttachmentCleanupService,
                 Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC));
         publicationService = new AdminPostPublicationService(
                 postRepository,
@@ -122,7 +137,7 @@ class AdminPostPublicationServiceTest {
     }
 
     @Test
-    void archivesPublishedPostWithoutChangingPublishedAtOrSourceQuestion() {
+    void archivesPublishedLinkedPostAndMarksSourceQuestionArchived() {
         StudentQuestion question = question(StudentQuestionStatus.PUBLISHED);
         Post post = new Post(
                 9L,
@@ -142,9 +157,58 @@ class AdminPostPublicationServiceTest {
         assertThat(post.getStatus()).isEqualTo(PostStatus.ARCHIVED);
         assertThat(post.getPublishedAt()).isEqualTo(CREATED_AT);
         assertThat(post.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
-        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.ARCHIVED);
+        assertThat(question.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
         assertThat(response.status()).isEqualTo(PostStatus.ARCHIVED);
         assertThat(response.publishedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void archivesPublishedManualPostWithoutTouchingQuestions() {
+        Post post = new Post(
+                9L,
+                section(),
+                "TÃ­tulo",
+                "Contenido",
+                PostStatus.PUBLISHED,
+                CREATED_AT,
+                CREATED_AT,
+                CREATED_AT,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        AdminPostResponse response = publicationService.archivePost(9L);
+
+        assertThat(post.getStatus()).isEqualTo(PostStatus.ARCHIVED);
+        assertThat(response.sourceQuestion()).isNull();
+    }
+
+    @Test
+    void rejectsArchiveWhenSourceQuestionIsNotPublished() {
+        for (StudentQuestionStatus status : new StudentQuestionStatus[] {
+                StudentQuestionStatus.PENDING,
+                StudentQuestionStatus.ARCHIVED,
+                StudentQuestionStatus.REJECTED
+        }) {
+            StudentQuestion question = question(status);
+            Post post = new Post(
+                    9L,
+                    question.getSection(),
+                    "TÃ­tulo",
+                    "Contenido",
+                    PostStatus.PUBLISHED,
+                    CREATED_AT,
+                    CREATED_AT,
+                    CREATED_AT,
+                    Set.of(),
+                    question);
+            when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+            assertThatThrownBy(() -> publicationService.archivePost(9L))
+                    .isInstanceOf(PostStateConflictException.class)
+                    .hasMessage("Source question must be published before archiving the post");
+        }
     }
 
     @Test
@@ -179,8 +243,8 @@ class AdminPostPublicationServiceTest {
     }
 
     @Test
-    void restoresArchivedPostWithoutChangingPublishedAtOrSourceQuestion() {
-        StudentQuestion question = question(StudentQuestionStatus.PUBLISHED);
+    void restoresArchivedLinkedPostAndMarksSourceQuestionPublished() {
+        StudentQuestion question = question(StudentQuestionStatus.ARCHIVED);
         Post post = new Post(
                 9L,
                 question.getSection(),
@@ -200,8 +264,57 @@ class AdminPostPublicationServiceTest {
         assertThat(post.getPublishedAt()).isEqualTo(CREATED_AT);
         assertThat(post.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
         assertThat(question.getStatus()).isEqualTo(StudentQuestionStatus.PUBLISHED);
+        assertThat(question.getUpdatedAt()).isEqualTo(PUBLISHED_AT);
         assertThat(response.status()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(response.publishedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void restoresArchivedManualPostWithoutTouchingQuestions() {
+        Post post = new Post(
+                9L,
+                section(),
+                "TÃ­tulo",
+                "Contenido",
+                PostStatus.ARCHIVED,
+                CREATED_AT,
+                CREATED_AT,
+                CREATED_AT,
+                Set.of(),
+                null);
+        when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+        AdminPostResponse response = publicationService.restorePost(9L);
+
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(response.sourceQuestion()).isNull();
+    }
+
+    @Test
+    void rejectsRestoreWhenSourceQuestionIsNotArchived() {
+        for (StudentQuestionStatus status : new StudentQuestionStatus[] {
+                StudentQuestionStatus.PENDING,
+                StudentQuestionStatus.PUBLISHED,
+                StudentQuestionStatus.REJECTED
+        }) {
+            StudentQuestion question = question(status);
+            Post post = new Post(
+                    9L,
+                    question.getSection(),
+                    "TÃ­tulo",
+                    "Contenido",
+                    PostStatus.ARCHIVED,
+                    CREATED_AT,
+                    CREATED_AT,
+                    CREATED_AT,
+                    Set.of(),
+                    question);
+            when(postRepository.findAdminById(9L)).thenReturn(Optional.of(post));
+
+            assertThatThrownBy(() -> publicationService.restorePost(9L))
+                    .isInstanceOf(PostStateConflictException.class)
+                    .hasMessage("Source question must be archived before restoring the post");
+        }
     }
 
     @Test

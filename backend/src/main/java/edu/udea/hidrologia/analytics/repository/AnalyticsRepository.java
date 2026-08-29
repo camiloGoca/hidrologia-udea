@@ -51,6 +51,15 @@ public class AnalyticsRepository {
                 """, sessionId, "viewedAt", viewedAt, postId);
     }
 
+    public void deletePostViewsForPost(long postId) {
+        jdbcClient.sql("""
+                DELETE FROM post_views
+                WHERE post_id = :postId
+                """)
+                .param("postId", postId)
+                .update();
+    }
+
     public long countSiteVisits() {
         return jdbcClient.sql("SELECT COUNT(*) FROM site_visits")
                 .query(Long.class)

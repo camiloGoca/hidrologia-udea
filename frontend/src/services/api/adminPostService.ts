@@ -93,6 +93,10 @@ export async function restoreAdminPost(postId: number): Promise<AdminPost> {
   return response.data
 }
 
-export async function discardManualAdminPost(postId: number): Promise<void> {
+export async function deleteAdminPost(postId: number): Promise<void> {
   await adminHttpClient.delete(`/admin/posts/${postId}`)
+}
+
+export async function discardManualAdminPost(postId: number): Promise<void> {
+  await deleteAdminPost(postId)
 }

@@ -78,8 +78,8 @@ public class AdminPostController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void discardManualDraft(@PathVariable Long id) {
-        adminPostService.discardManualDraft(id);
+    public void deletePost(@PathVariable Long id) {
+        adminPostService.deletePost(id);
     }
 
     @PostMapping("/{id}/publish")

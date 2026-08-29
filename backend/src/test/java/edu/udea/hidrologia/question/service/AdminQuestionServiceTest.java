@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,12 +53,19 @@ class AdminQuestionServiceTest {
     @Mock
     private PostRepository postRepository;
 
+    @Mock
+    private QuestionAttachmentCleanupService questionAttachmentCleanupService;
+
     private AdminQuestionService adminQuestionService;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(UPDATED_AT, ZoneOffset.UTC);
-        adminQuestionService = new AdminQuestionService(studentQuestionRepository, postRepository, clock);
+        adminQuestionService = new AdminQuestionService(
+                studentQuestionRepository,
+                postRepository,
+                questionAttachmentCleanupService,
+                clock);
         lenient().when(postRepository.findBySourceQuestionIdIn(any())).thenReturn(List.of());
         lenient().when(postRepository.findBySourceQuestionId(any())).thenReturn(Optional.empty());
     }
@@ -376,6 +384,93 @@ class AdminQuestionServiceTest {
         AdminQuestionStatusUpdateResponse response = adminQuestionService.reopenQuestion(1L);
 
         assertThat(response.status()).isEqualTo(StudentQuestionStatus.PENDING);
+    }
+
+    @Test
+    void blocksReopeningArchivedQuestionWhenItHasLinkedPost() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.ARCHIVED, NOW);
+        when(studentQuestionRepository.findById(1L)).thenReturn(Optional.of(question));
+        when(postRepository.existsBySourceQuestionId(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> adminQuestionService.reopenQuestion(1L))
+                .isInstanceOf(QuestionDraftConflictException.class)
+                .hasMessage("This question has a linked post");
+
+        verify(studentQuestionRepository, never()).save(question);
+    }
+
+    @Test
+    void deletesRejectedQuestionWithoutAttachment() {
+        StudentQuestion question = question(1L, null, "Pregunta", StudentQuestionStatus.REJECTED, NOW);
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+
+        adminQuestionService.deleteRejectedQuestion(1L);
+
+        verify(questionAttachmentCleanupService).deleteRemoteAttachment(null);
+        verify(studentQuestionRepository).delete(question);
+    }
+
+    @Test
+    void deletesRejectedQuestionWithAttachmentAfterRemoteCleanup() {
+        StudentQuestion question = withAttachment(question(1L, null, "Pregunta", StudentQuestionStatus.REJECTED, NOW));
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+
+        adminQuestionService.deleteRejectedQuestion(1L);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                questionAttachmentCleanupService,
+                studentQuestionRepository);
+        inOrder.verify(questionAttachmentCleanupService).deleteRemoteAttachment(question.getAttachment());
+        inOrder.verify(studentQuestionRepository).delete(question);
+    }
+
+    @Test
+    void keepsRejectedQuestionWhenAttachmentCleanupFails() {
+        StudentQuestion question = withAttachment(question(1L, null, "Pregunta", StudentQuestionStatus.REJECTED, NOW));
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+        org.mockito.Mockito.doThrow(new edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException(
+                "Image uploads are temporarily unavailable"))
+                .when(questionAttachmentCleanupService)
+                .deleteRemoteAttachment(question.getAttachment());
+
+        assertThatThrownBy(() -> adminQuestionService.deleteRejectedQuestion(1L))
+                .isInstanceOf(edu.udea.hidrologia.shared.storage.ImageStorageUnavailableException.class);
+
+        verify(studentQuestionRepository, never()).delete(question);
+    }
+
+    @Test
+    void rejectsDeletingQuestionUnlessItIsRejectedAndUnlinked() {
+        for (StudentQuestionStatus status : new StudentQuestionStatus[] {
+                StudentQuestionStatus.PENDING,
+                StudentQuestionStatus.PUBLISHED,
+                StudentQuestionStatus.ARCHIVED
+        }) {
+            StudentQuestion question = question(1L, null, "Pregunta", status, NOW);
+            when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(question));
+
+            assertThatThrownBy(() -> adminQuestionService.deleteRejectedQuestion(1L))
+                    .isInstanceOf(InvalidQuestionStatusTransitionException.class);
+        }
+
+        StudentQuestion rejected = question(1L, null, "Pregunta", StudentQuestionStatus.REJECTED, NOW);
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(1L)).thenReturn(Optional.of(rejected));
+        when(postRepository.existsBySourceQuestionId(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> adminQuestionService.deleteRejectedQuestion(1L))
+                .isInstanceOf(QuestionDraftConflictException.class)
+                .hasMessage("This question has a linked post");
+
+        verify(studentQuestionRepository, never()).delete(rejected);
+    }
+
+    @Test
+    void throwsNotFoundWhenDeletingMissingQuestion() {
+        when(studentQuestionRepository.findByIdWithSectionAndAttachment(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminQuestionService.deleteRejectedQuestion(404L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Question not found");
     }
 
     @Test

@@ -233,6 +233,25 @@ class AdminQuestionControllerTest {
     }
 
     @Test
+    void deletesRejectedQuestion() throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/questions/1"))
+                .andExpect(status().isNoContent());
+
+        verify(adminQuestionService).deleteRejectedQuestion(1L);
+    }
+
+    @Test
+    void returnsConflictWhenDeletingQuestionIsInvalid() throws Exception {
+        Mockito.doThrow(new InvalidQuestionStatusTransitionException())
+                .when(adminQuestionService)
+                .deleteRejectedQuestion(1L);
+
+        mockMvc.perform(delete("/api/v1/admin/questions/1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)));
+    }
+
+    @Test
     void returnsConflictForInvalidTransition() throws Exception {
         when(adminQuestionService.archiveQuestion(1L)).thenThrow(new InvalidQuestionStatusTransitionException());
 

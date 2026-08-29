@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAdminAuthorizationError } from '@/services/api/adminErrors'
 import {
   archiveAdminPost,
+  deleteAdminPost,
   deleteAdminPostImage,
   discardManualAdminPost,
   getAdminPost,
@@ -42,6 +43,7 @@ vi.mock('@/services/api/adminPostService', () => ({
   publishAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   archiveAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
   restoreAdminPost: vi.fn<(id: number) => Promise<AdminPost>>(),
+  deleteAdminPost: vi.fn<(id: number) => Promise<void>>(),
   discardManualAdminPost: vi.fn<(id: number) => Promise<void>>(),
   uploadAdminPostImage: vi.fn<(postId: number, payload: unknown) => Promise<unknown>>(),
   updateAdminPostImageAltText: vi.fn<(postId: number, imageId: number, altText: string) => Promise<unknown>>(),
@@ -73,6 +75,7 @@ const mockedUpdateAdminPost = vi.mocked(updateAdminPost)
 const mockedPublishAdminPost = vi.mocked(publishAdminPost)
 const mockedArchiveAdminPost = vi.mocked(archiveAdminPost)
 const mockedRestoreAdminPost = vi.mocked(restoreAdminPost)
+const mockedDeleteAdminPost = vi.mocked(deleteAdminPost)
 const mockedDiscardManualAdminPost = vi.mocked(discardManualAdminPost)
 const mockedUploadAdminPostImage = vi.mocked(uploadAdminPostImage)
 const mockedUpdateAdminPostImageAltText = vi.mocked(updateAdminPostImageAltText)
@@ -92,6 +95,7 @@ describe('AdminPostEditorView', () => {
     mockedPublishAdminPost.mockReset()
     mockedArchiveAdminPost.mockReset()
     mockedRestoreAdminPost.mockReset()
+    mockedDeleteAdminPost.mockReset()
     mockedDiscardManualAdminPost.mockReset()
     mockedUploadAdminPostImage.mockReset()
     mockedUpdateAdminPostImageAltText.mockReset()
@@ -646,6 +650,69 @@ describe('AdminPostEditorView', () => {
     expect(mockedRestoreAdminPost).toHaveBeenCalledWith(9)
     expect(wrapper.text()).toContain('PUBLICADA')
     expect(wrapper.text()).toContain('Publicación restaurada.')
+  })
+
+  it('deletes an archived manual post after confirmation', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Publicación archivada',
+        content: 'Contenido',
+        status: 'ARCHIVED',
+        sourceQuestionId: null,
+        sourceQuestion: null,
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+    mockedDeleteAdminPost.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Eliminar definitivamente')
+    await buttonByText(wrapper, 'Eliminar definitivamente').trigger('click')
+    expect(wrapper.text()).toContain('¿Eliminar esta publicación definitivamente?')
+    expect(wrapper.text()).toContain('Se eliminarán también sus imágenes y sus datos de visualización.')
+
+    const confirmButton = lastButtonByText(wrapper, 'Eliminar definitivamente')
+    await confirmButton.trigger('click')
+    await confirmButton.trigger('click')
+    await flushPromises()
+
+    expect(mockedDeleteAdminPost).toHaveBeenCalledTimes(1)
+    expect(mockedDeleteAdminPost).toHaveBeenCalledWith(9)
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'admin-posts',
+      query: { estado: 'archivadas' },
+    })
+  })
+
+  it('uses source-question deletion copy for archived posts linked to questions', async () => {
+    mockedGetAdminPost.mockResolvedValue(
+      adminPost({
+        title: 'Publicación archivada',
+        content: 'Contenido',
+        status: 'ARCHIVED',
+        sourceQuestion: {
+          ...adminPost().sourceQuestion!,
+          status: 'ARCHIVED',
+        },
+        publishedAt: '2026-01-02T00:00:00Z',
+      }),
+    )
+    mockedDeleteAdminPost.mockResolvedValue()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Eliminar definitivamente').trigger('click')
+
+    expect(wrapper.text()).toContain('¿Eliminar esta publicación y su pregunta original?')
+    expect(wrapper.text()).toContain('la pregunta original y su imagen adjunta')
+
+    await lastButtonByText(wrapper, 'Eliminar definitivamente').trigger('click')
+    await flushPromises()
+
+    expect(mockedDeleteAdminPost).toHaveBeenCalledWith(9)
   })
 
   it('works without a source question reference', async () => {

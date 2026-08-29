@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import edu.udea.hidrologia.analytics.repository.AnalyticsRepository;
 import edu.udea.hidrologia.post.content.PostContentDocumentService;
 import edu.udea.hidrologia.post.dto.AdminPostResponse;
 import edu.udea.hidrologia.post.dto.AdminPostImageResponse;
@@ -31,6 +32,9 @@ import edu.udea.hidrologia.post.entity.PostStatus;
 import edu.udea.hidrologia.post.repository.PostImageRepository;
 import edu.udea.hidrologia.post.repository.PostRepository;
 import edu.udea.hidrologia.question.entity.StudentQuestion;
+import edu.udea.hidrologia.question.entity.StudentQuestionStatus;
+import edu.udea.hidrologia.question.repository.StudentQuestionRepository;
+import edu.udea.hidrologia.question.service.QuestionAttachmentCleanupService;
 import edu.udea.hidrologia.section.entity.Section;
 import edu.udea.hidrologia.section.repository.SectionRepository;
 import edu.udea.hidrologia.shared.error.ResourceNotFoundException;
@@ -49,8 +53,11 @@ public class AdminPostService {
     private final PostImageRepository postImageRepository;
     private final SectionRepository sectionRepository;
     private final TagRepository tagRepository;
+    private final StudentQuestionRepository studentQuestionRepository;
+    private final AnalyticsRepository analyticsRepository;
     private final PostContentDocumentService postContentDocumentService;
     private final PostImageCleanupService postImageCleanupService;
+    private final QuestionAttachmentCleanupService questionAttachmentCleanupService;
     private final Clock clock;
 
     public AdminPostService(
@@ -58,15 +65,21 @@ public class AdminPostService {
             PostImageRepository postImageRepository,
             SectionRepository sectionRepository,
             TagRepository tagRepository,
+            StudentQuestionRepository studentQuestionRepository,
+            AnalyticsRepository analyticsRepository,
             PostContentDocumentService postContentDocumentService,
             PostImageCleanupService postImageCleanupService,
+            QuestionAttachmentCleanupService questionAttachmentCleanupService,
             Clock clock) {
         this.postRepository = postRepository;
         this.postImageRepository = postImageRepository;
         this.sectionRepository = sectionRepository;
         this.tagRepository = tagRepository;
+        this.studentQuestionRepository = studentQuestionRepository;
+        this.analyticsRepository = analyticsRepository;
         this.postContentDocumentService = postContentDocumentService;
         this.postImageCleanupService = postImageCleanupService;
+        this.questionAttachmentCleanupService = questionAttachmentCleanupService;
         this.clock = clock;
     }
 
@@ -136,6 +149,41 @@ public class AdminPostService {
         Post post = postRepository.findAdminById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
 
+        discardManualDraft(post);
+    }
+
+    @Transactional
+    public void deletePost(Long id) {
+        Post post = postRepository.findAdminById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found"));
+
+        if (post.getStatus() == PostStatus.DRAFT) {
+            discardManualDraft(post);
+            return;
+        }
+
+        if (post.getStatus() != PostStatus.ARCHIVED) {
+            throw new PostStateConflictException("Only archived posts can be deleted permanently");
+        }
+
+        StudentQuestion sourceQuestion = post.getSourceQuestion();
+        if (sourceQuestion != null && sourceQuestion.getStatus() != StudentQuestionStatus.ARCHIVED) {
+            throw new PostStateConflictException("Source question must be archived before deleting the post");
+        }
+
+        postImageCleanupService.deleteAllForPost(post.getId());
+        if (sourceQuestion != null) {
+            questionAttachmentCleanupService.deleteRemoteAttachment(sourceQuestion.getAttachment());
+        }
+        analyticsRepository.deletePostViewsForPost(post.getId());
+        postRepository.delete(post);
+        postRepository.flush();
+        if (sourceQuestion != null) {
+            studentQuestionRepository.delete(sourceQuestion);
+        }
+    }
+
+    private void discardManualDraft(Post post) {
         if (post.getStatus() != PostStatus.DRAFT || post.getSourceQuestion() != null) {
             throw new PostStateConflictException("Only manual draft posts can be discarded here");
         }

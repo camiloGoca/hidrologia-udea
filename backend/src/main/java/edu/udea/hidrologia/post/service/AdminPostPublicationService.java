@@ -64,7 +64,16 @@ public class AdminPostPublicationService {
             throw new PostStateConflictException("Only published posts can be archived");
         }
 
-        post.archive(Instant.now(clock));
+        Instant now = Instant.now(clock);
+        StudentQuestion sourceQuestion = post.getSourceQuestion();
+        if (sourceQuestion != null) {
+            if (sourceQuestion.getStatus() != StudentQuestionStatus.PUBLISHED) {
+                throw new PostStateConflictException("Source question must be published before archiving the post");
+            }
+
+            sourceQuestion.transitionTo(StudentQuestionStatus.ARCHIVED, now);
+        }
+        post.archive(now);
 
         return adminPostService.toResponse(post);
     }
@@ -79,7 +88,16 @@ public class AdminPostPublicationService {
         }
 
         validatePublishable(post);
-        post.restore(Instant.now(clock));
+        Instant now = Instant.now(clock);
+        StudentQuestion sourceQuestion = post.getSourceQuestion();
+        if (sourceQuestion != null) {
+            if (sourceQuestion.getStatus() != StudentQuestionStatus.ARCHIVED) {
+                throw new PostStateConflictException("Source question must be archived before restoring the post");
+            }
+
+            sourceQuestion.transitionTo(StudentQuestionStatus.PUBLISHED, now);
+        }
+        post.restore(now);
 
         return adminPostService.toResponse(post);
     }
