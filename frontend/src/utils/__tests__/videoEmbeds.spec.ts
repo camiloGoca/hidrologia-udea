@@ -9,6 +9,8 @@ describe('videoEmbeds', () => {
       'https://youtu.be/abc_DEF1234',
       'https://www.youtube.com/shorts/abc_DEF1234',
       'https://www.youtube.com/embed/abc_DEF1234',
+      'https://www.youtube.com/live/abc_DEF1234',
+      'https://www.youtube.com/live/abc_DEF1234?si=abc123',
     ]) {
       expect(parseVideoUrl(url)).toEqual({
         ok: true,
@@ -17,6 +19,19 @@ describe('videoEmbeds', () => {
           sourceUrl: url,
           videoId: 'abc_DEF1234',
         },
+      })
+    }
+  })
+
+  it('rejects unsupported YouTube Live URL shapes', () => {
+    for (const url of [
+      'https://www.youtube.com/live/',
+      'https://www.youtube.com/live/rui5xgyketg/extra',
+      'https://youtube.com.evil.example/live/rui5xgyketg',
+    ]) {
+      expect(parseVideoUrl(url)).toEqual({
+        ok: false,
+        error: { message: 'Usa un enlace de YouTube, TikTok o un archivo HTTPS .mp4/.webm.' },
       })
     }
   })

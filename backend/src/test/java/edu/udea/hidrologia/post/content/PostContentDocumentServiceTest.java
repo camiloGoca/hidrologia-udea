@@ -509,6 +509,16 @@ class PostContentDocumentServiceTest {
                 "provider": "youtube",
                 "sourceUrl": "https://www.youtube.com/embed/abc_DEF1234",
                 "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/abc_DEF1234?si=abc123",
+                "videoId": "abc_DEF1234"
                 """)) {
             assertThat(service.validate(videoDocument(attrs))).containsEntry("type", "doc");
         }
@@ -539,12 +549,32 @@ class PostContentDocumentServiceTest {
                 """,
                 """
                 "provider": "youtube",
+                "sourceUrl": "https://youtube.com.evil.example/live/abc_DEF1234",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
                 "sourceUrl": "http://www.youtube.com/watch?v=abc_DEF1234",
                 "videoId": "abc_DEF1234"
                 """,
                 """
                 "provider": "youtube",
                 "sourceUrl": "https://www.youtube.com/watch?v=abc_DEF1234",
+                "videoId": "different1"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/abc_DEF1234/extra",
+                "videoId": "abc_DEF1234"
+                """,
+                """
+                "provider": "youtube",
+                "sourceUrl": "https://www.youtube.com/live/abc_DEF1234",
                 "videoId": "different1"
                 """,
                 """
