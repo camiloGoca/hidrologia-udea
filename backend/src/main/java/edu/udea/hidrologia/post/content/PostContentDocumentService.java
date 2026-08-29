@@ -599,6 +599,11 @@ public class PostContentDocumentService {
             return pathSegment(path, 1);
         }
 
+        String[] segments = pathSegments(path);
+        if (segments.length == 2 && "live".equals(segments[0])) {
+            return segments[1];
+        }
+
         return null;
     }
 

@@ -139,6 +139,11 @@ function extractYoutubeVideoId(url: URL): string | null {
     return pathSegment(url, 1)
   }
 
+  const segments = pathSegments(url)
+  if (segments.length === 2 && segments[0] === 'live') {
+    return segments[1] ?? null
+  }
+
   return null
 }
 
