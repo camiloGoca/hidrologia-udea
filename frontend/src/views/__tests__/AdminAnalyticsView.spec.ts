@@ -67,6 +67,36 @@ describe('AdminAnalyticsView', () => {
     expect(wrapper.text()).toContain('Publicadas/respondidas')
   })
 
+  it('renders daily visit bars with visible values and proportional heights', async () => {
+    mockedGetSummary.mockResolvedValue({
+      ...summary(),
+      dailyVisits: [
+        { date: '2026-08-25', visits: 0 },
+        { date: '2026-08-26', visits: 2 },
+        { date: '2026-08-27', visits: 4 },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="daily-visit-value"]').map((item) => item.text())).toEqual([
+      '0',
+      '2',
+      '4',
+    ])
+
+    const bars = wrapper.findAll('[data-testid="daily-visit-bar"]')
+    const barStyles = bars.map((bar) => bar.attributes('style'))
+
+    expect(bars).toHaveLength(3)
+    expect(barStyles).toEqual([
+      expect.stringContaining('height: 0%;'),
+      expect.stringContaining('height: 50%;'),
+      expect.stringContaining('height: 100%;'),
+    ])
+  })
+
   it('renders empty ranking states', async () => {
     mockedGetSummary.mockResolvedValue({
       ...summary(),
