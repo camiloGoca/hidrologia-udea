@@ -129,9 +129,10 @@ Migraciones actuales:
 - `V6__link_posts_to_source_questions.sql`;
 - `V7__add_post_content_document.sql`;
 - `V8__create_post_images.sql`;
-- `V9__create_analytics.sql`.
+- `V9__create_analytics.sql`;
+- `V10__sync_archived_source_questions.sql`.
 
-Las migraciones V1-V9 ya aplicadas son inmutables.
+Las migraciones ya aplicadas no se modifican. Los cambios futuros del esquema se incorporan mediante nuevas migraciones versionadas.
 
 ## 6. API pública
 
