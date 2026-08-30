@@ -91,8 +91,8 @@ Reglas:
 
 - crear manualmente una publicación siempre produce un `DRAFT`;
 - publicar un borrador lo vuelve visible;
-- archivar oculta una publicación sin borrarla;
-- restaurar vuelve a publicar una publicación archivada;
+- archivar oculta una publicación sin borrarla y, si nació de una pregunta, sincroniza esa pregunta como `ARCHIVED`;
+- restaurar vuelve a publicar una publicación archivada y, si nació de una pregunta, sincroniza esa pregunta como `PUBLISHED`;
 - descartar por endpoint está limitado a borradores manuales sin pregunta de origen;
 - no existe hard-delete público de publicaciones publicadas como funcionalidad de producto.
 
