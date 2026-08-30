@@ -257,7 +257,7 @@ npm run build
 - El JSON de service account de Firebase debe vivir fuera del repositorio.
 - Los Firebase ID Tokens no se persisten manualmente en el frontend.
 - La autorización administrativa no depende del email: el backend compara el UID del token con `FIREBASE_ADMIN_UID`.
-- CORS se configura con origins explícitos; no se usa wildcard.
+- CORS usa origins explícitos para producción y un patrón restringido para los Preview Channels de Firebase; no se utiliza un wildcard global `*`.
 - Los secretos de Cloudinary solo pertenecen al backend.
 - Turnstile usa site key pública en frontend y secret key solo en backend.
 - En producción, Turnstile puede validar `action` y `hostname`.
