@@ -62,7 +62,11 @@ function formatDate(value: string): string {
 }
 
 function barHeight(visits: number): string {
-  return `${Math.max(6, Math.round((visits / maxDailyVisits.value) * 100))}%`
+  if (visits <= 0) {
+    return '0%'
+  }
+
+  return `${Math.max(8, Math.round((visits / maxDailyVisits.value) * 100))}%`
 }
 </script>
 
@@ -115,17 +119,25 @@ function barHeight(visits: number): string {
             <p class="text-sm font-bold text-slate-500">Zona horaria: America/Bogota</p>
           </div>
 
-          <div class="mt-6 flex h-56 items-end gap-1 overflow-x-auto pb-2" aria-label="Gráfica de visitas diarias">
+          <div class="mt-6 flex gap-2 overflow-x-auto pb-2" aria-label="Gráfica de visitas diarias">
             <div
               v-for="day in summary.dailyVisits"
               :key="day.date"
-              class="flex min-w-8 flex-1 flex-col items-center justify-end gap-2"
+              class="flex min-w-10 flex-1 flex-col items-center gap-2"
             >
+              <span class="text-xs font-black text-slate-700" data-testid="daily-visit-value">
+                {{ day.visits }}
+              </span>
               <div
-                class="w-full rounded-t-xl bg-emerald-600"
-                :style="{ height: barHeight(day.visits) }"
+                class="flex h-44 w-full items-end rounded-2xl bg-slate-50 px-1"
                 :aria-label="`${day.visits} visitas el ${formatDate(day.date)}`"
-              />
+              >
+                <div
+                  class="w-full rounded-t-xl bg-emerald-600"
+                  :style="{ height: barHeight(day.visits) }"
+                  data-testid="daily-visit-bar"
+                />
+              </div>
               <span class="text-[10px] font-bold text-slate-500">{{ formatDate(day.date) }}</span>
             </div>
           </div>
