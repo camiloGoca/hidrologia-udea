@@ -113,8 +113,20 @@ Soporta:
 - colores y resaltados controlados;
 - bloques académicos: Nota, Ejemplo e Importante;
 - imágenes insertables con texto alternativo, caption y tamaño visual controlado;
+- videos embebidos mediante una acción explícita de Video;
 - vista previa con el estado local del formulario, incluso sin guardar;
-- guardado manual.
+- autosave para publicaciones `DRAFT` y `ARCHIVED`;
+- guardado manual para publicaciones `PUBLISHED`.
+
+Autosave observa título, contenido estructurado, sección y hashtags. El editor informa los estados `Guardado`, `Cambios sin guardar`, `Guardando...` y `No se pudo guardar`, permite reintentar si falla y bloquea acciones que dependen del contenido persistido mientras hay cambios pendientes o un guardado en curso.
+
+El botón Video permite insertar recursos embebidos validados:
+
+- YouTube: `youtube.com/watch?v=VIDEO_ID`, `youtu.be/VIDEO_ID`, `youtube.com/shorts/VIDEO_ID`, `youtube.com/embed/VIDEO_ID` y `youtube.com/live/VIDEO_ID`;
+- TikTok: enlaces completos `https://www.tiktok.com/@usuario/video/POST_ID` y `https://www.tiktok.com/player/v1/POST_ID`;
+- video directo HTTPS terminado en `.mp4` o `.webm`.
+
+Los parámetros de consulta de YouTube, como `?si=...`, pueden existir pero no forman parte del ID. Los enlaces cortos de TikTok (`vt.tiktok.com`, `vm.tiktok.com`) no se resuelven automáticamente: el profesor debe abrir el video y usar el enlace completo/canónico. La acción Enlace sigue creando enlaces normales, no embeds. No existen previews automáticas genéricas de páginas web.
 
 El renderer público usa el documento estructurado validado por backend y no usa `v-html`.
 
@@ -243,21 +255,13 @@ La autorización no depende del email. El backend compara el UID del token con `
 
 Las rutas administrativas viven bajo `/api/v1/admin/**` y requieren rol `ADMIN`.
 
-## 14. Gaps preproducción
-
-Antes de producción pública se recomienda priorizar:
-
-- revisión final de despliegue Firebase Hosting + Cloud Run + Neon;
-- configuración de secretos en infraestructura cloud;
-- backups/retención de base de datos;
-- monitoreo básico de errores.
+## 14. Fuera de alcance actual
 
 No son parte del producto actual:
 
 - registro público de estudiantes;
 - creación de hashtags por estudiantes;
 - comentarios;
-- autosave;
 - versionado editorial;
 - búsqueda avanzada/autocomplete;
 - imágenes de publicaciones reutilizadas automáticamente desde preguntas.

@@ -2,6 +2,9 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import logoHeaderUrl from '@/assets/brand/hidrologia-logo-header.png'
+import logoMarkUrl from '@/assets/brand/hidrologia-mark.png'
+
 const route = useRoute()
 const router = useRouter()
 const isMenuOpen = ref(false)
@@ -37,35 +40,28 @@ function submitSearch() {
 <template>
   <header class="sticky top-0 z-20 border-b border-emerald-950/10 bg-white/95 shadow-sm backdrop-blur">
     <nav
-      class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-6"
+      class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-2 sm:px-6"
       aria-label="Navegación principal"
     >
       <RouterLink
         :to="{ name: 'home' }"
-        class="flex items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700"
+        class="flex shrink-0 items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700"
         @click="closeMenu"
       >
-        <span
-          class="grid size-11 place-items-center rounded-lg bg-gradient-to-br from-emerald-800 to-sky-900 text-white shadow-sm"
-          aria-hidden="true"
-        >
-          <svg
-            class="size-7"
-            viewBox="0 0 32 32"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M16 4C12 9 9 13.5 9 18a7 7 0 0 0 14 0c0-4.5-3-9-7-14Z" />
-            <path d="M12.5 19c2.4 2 4.6 2 7 0" />
-          </svg>
-        </span>
-        <span class="leading-tight">
-          <span class="block text-lg font-black text-emerald-950">Hidrología</span>
-          <span class="block text-xs font-bold uppercase text-sky-800">UdeA</span>
-        </span>
+        <img
+          :src="logoMarkUrl"
+          alt="Hidrología UdeA"
+          class="h-10 w-auto sm:hidden"
+          width="256"
+          height="256"
+        />
+        <img
+          :src="logoHeaderUrl"
+          alt="Hidrología UdeA"
+          class="hidden h-11 w-auto sm:block lg:h-12"
+          width="768"
+          height="300"
+        />
       </RouterLink>
 
       <button

@@ -111,11 +111,11 @@ Desarrollo local:
 - imagen oficial PostgreSQL;
 - puerto host configurable con `POSTGRES_HOST_PORT`.
 
-Producción prevista:
+Producción:
 
 - Neon PostgreSQL.
-- Spring Boot se ejecutará con el perfil `prod`, tomando `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` desde variables de entorno.
-- El puerto HTTP usa `PORT` con fallback `8080`, compatible con contenedores y Cloud Run.
+- Spring Boot se ejecuta en Northflank con el perfil `prod`, tomando `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` desde variables de entorno.
+- El puerto HTTP usa `PORT` con fallback `8080`, compatible con ejecución containerizada.
 
 Flyway controla el esquema. Hibernate valida con `ddl-auto=validate`; no crea ni actualiza tablas.
 
@@ -282,9 +282,36 @@ El documento permite únicamente nodos, marcas y atributos whitelisted:
 - bloques académicos;
 - enlaces HTTP/HTTPS/mailto seguros;
 - estilos semánticos controlados;
-- imágenes por `postImageId`, caption y `displaySize`.
+- imágenes por `postImageId`, caption y `displaySize`;
+- videos embebidos por provider, `sourceUrl` y `videoId`.
 
 Se rechazan HTML libre, estilos CSS arbitrarios, clases arbitrarias y atributos no permitidos.
+
+### Videos embebidos
+
+El nodo `video` es parte del documento estructurado y nunca almacena iframes, HTML ni scripts ingresados por el usuario. El backend valida y normaliza `provider`, `sourceUrl` y `videoId`; el renderer construye la salida segura a partir de esos datos validados.
+
+Formatos permitidos:
+
+- YouTube por HTTPS con hosts permitidos y rutas estrictas: `/watch?v=VIDEO_ID`, `youtu.be/VIDEO_ID`, `/shorts/VIDEO_ID`, `/embed/VIDEO_ID` y `/live/VIDEO_ID`. En rutas basadas en path no se aceptan segmentos vacíos ni segmentos extra, y el `videoId` debe coincidir con el ID extraído de la URL.
+- TikTok por HTTPS con hosts permitidos y rutas estrictas: `/@usuario/video/POST_ID` y `/player/v1/POST_ID`. El `POST_ID` es numérico y debe coincidir con el ID extraído de la URL. Los shortlinks `vt.tiktok.com` y `vm.tiktok.com` no se resuelven ni se aceptan automáticamente.
+- Video directo por HTTPS con extensión `.mp4` o `.webm`; en este caso `videoId` es `null`.
+
+Los embeds públicos de YouTube/TikTok se generan desde IDs validados, no desde HTML arbitrario. Los videos directos usan únicamente la `sourceUrl` HTTPS validada.
+
+### Autosave editorial
+
+El autosave no introduce tablas ni endpoints nuevos. Reutiliza el endpoint administrativo existente `PATCH /api/v1/admin/posts/{id}` para guardar el mismo contrato editorial que el guardado manual.
+
+Reglas:
+
+- publicaciones `DRAFT` y `ARCHIVED` usan autosave;
+- publicaciones `PUBLISHED` conservan guardado manual;
+- el debounce actual es de 1500 ms;
+- no se envían `PATCH` concurrentes para el mismo editor;
+- el estado persistido se controla con snapshots para evitar que una respuesta anterior sobrescriba ediciones locales más recientes;
+- si aparecen nuevos cambios durante una petición, se programa un guardado posterior;
+- las acciones que dependen de contenido persistido quedan bloqueadas mientras hay cambios pendientes o guardado en curso.
 
 ## 10. Imágenes
 
@@ -372,7 +399,7 @@ VITE_FIREBASE_*
 
 `GOOGLE_APPLICATION_CREDENTIALS` lo descubre Google Application Default Credentials; la aplicación no abre ni parsea manualmente el JSON de service account.
 
-En ejecución local esa variable puede apuntar a un JSON fuera del repositorio. En Cloud Run se debe usar la service identity del servicio para que ADC resuelva credenciales sin subir ni referenciar un JSON de service account.
+En ejecución local esa variable puede apuntar a un JSON fuera del repositorio. En producción, las credenciales deben entregarse de forma segura mediante la configuración del entorno de hosting. El repositorio no contiene JSON de service account, private keys ni rutas personales.
 
 ## 14. Preparación de contenedor y perfil productivo
 
@@ -430,17 +457,17 @@ Frontend:
 - mocks de servicios API/Firebase;
 - tests sin backend real.
 
-## 17. Gaps preproducción
+## 17. Operación
 
-Riesgo principal pendiente:
+La arquitectura actual ya contempla:
 
-- monitoreo operativo de abuso y errores antes de abrir tráfico real de producción.
+- Firebase Hosting para el frontend live;
+- Northflank para el backend;
+- Neon PostgreSQL;
+- GitHub Actions para CI/CD;
+- Firebase Hosting Preview Channels de solo lectura para Pull Requests internos.
 
-Pendiente de infraestructura:
+Pendientes operativos fuera del repositorio:
 
-- configuración final de Firebase Hosting;
-- Cloud Run;
-- Neon;
-- secretos cloud;
-- CI/CD;
-- monitoreo y backups.
+- monitoreo operativo de abuso y errores durante la operación en producción;
+- backups/retención y alertas según la política operativa que se defina para el proyecto.

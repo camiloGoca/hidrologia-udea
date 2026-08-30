@@ -6,8 +6,9 @@ Aplicación web académica para apoyar la materia de Hidrología de la Universid
 
 - Frontend: Vue 3, TypeScript, Vite, Vue Router, Pinia, Axios, Tailwind CSS, Tiptap y Vitest.
 - Backend: Java 17, Spring Boot 4.1.x, Maven, Spring Web, Spring Security, Spring Data JPA, Flyway, Actuator y OpenAPI.
-- Datos: PostgreSQL local con Docker Compose; Neon previsto para producción.
+- Datos: PostgreSQL local con Docker Compose; Neon PostgreSQL en producción.
 - Servicios externos: Firebase Authentication para el profesor, Cloudinary para imágenes y Cloudflare Turnstile para reducir abuso en preguntas públicas.
+- Producción y automatización: Firebase Hosting para la SPA, Northflank para el backend y GitHub Actions para CI/CD.
 
 ## Estructura
 
@@ -94,7 +95,7 @@ docker build -t hidrologia-backend:local .
 
 La aplicación escucha el puerto indicado por `PORT` y usa `8080` como fallback local. El perfil `prod` reactiva DataSource, JPA y Flyway mediante variables de entorno (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) y mantiene Hibernate en `ddl-auto=validate`.
 
-En Cloud Run, Firebase Admin debe usar Application Default Credentials mediante la service identity del servicio. No configures `GOOGLE_APPLICATION_CREDENTIALS` con una ruta a un JSON dentro de Cloud Run.
+Firebase Admin usa Application Default Credentials. En local, `GOOGLE_APPLICATION_CREDENTIALS` puede apuntar a un JSON de service account fuera del repositorio. En producción, la credencial debe entregarse de forma segura mediante la configuración del entorno de hosting, sin versionar JSON ni rutas personales.
 
 En producción, SpringDoc/Swagger queda deshabilitado y Actuator expone solo `health` sin detalles.
 
@@ -125,9 +126,11 @@ Frontend:
 ```powershell
 cd frontend
 npm run test:unit
-npm run lint
+npm run lint:check
 npm run build
 ```
+
+`npm run lint` existe para desarrollo y puede aplicar fixes automáticamente. Para verificación sin modificar archivos usa `npm run lint:check`.
 
 ## Seguridad local
 
@@ -140,6 +143,17 @@ npm run build
 - Para pruebas locales con dummy keys oficiales de Cloudflare, deja `TURNSTILE_EXPECTED_ACTION=` y `TURNSTILE_EXPECTED_HOSTNAMES=` vacíos: esas credenciales sirven para comprobar `success=true`, pero pueden devolver metadata dummy no equivalente al entorno real.
 - Para producción, configura también `TURNSTILE_EXPECTED_ACTION=student_question` y `TURNSTILE_EXPECTED_HOSTNAMES=<hostname público del frontend>` para activar validación estricta de metadata.
 
-## Estado preproducción
+## Producción y CI/CD
 
-El producto ya cuenta con módulos públicos, autenticación del profesor, administración de contenido, imágenes en publicaciones, analíticas propias y protección anti-abuso con Cloudflare Turnstile para el envío público de preguntas. Antes de producción quedan pendientes la configuración final de despliegue, secretos cloud, monitoreo y backups.
+El despliegue actual usa:
+
+- Frontend: Firebase Hosting.
+- Backend: Northflank.
+- Base de datos: Neon PostgreSQL.
+- CI/CD: GitHub Actions.
+
+En Pull Requests internos del mismo repositorio, GitHub Actions ejecuta pruebas backend/frontend y publica un Firebase Hosting Preview Channel de solo lectura. Ese preview no habilita admin, envío de preguntas ni escrituras de analytics, y no despliega backend de preview.
+
+En push/merge a `main`, GitHub Actions ejecuta CI, despliega el frontend live en Firebase Hosting y dispara/verifica el despliegue del backend en Northflank para el commit exacto.
+
+La especificación funcional vive en `docs/PRODUCT_SPEC.md` y las decisiones técnicas en `docs/ARCHITECTURE.md`.
