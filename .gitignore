@@ -8,6 +8,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local AI/development instructions
+AGENTS.md
+
 # Environment files with real secrets
 .env
 .env.*
